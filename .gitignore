@@ -36,3 +36,4 @@ desktop.ini
 *.tmp
 ~$*.xlsx
 ~$*.xls
+.claude
