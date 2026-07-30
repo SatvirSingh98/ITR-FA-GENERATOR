@@ -134,7 +134,6 @@ For sales in the current/future FY, the tool calculates advance tax payment sche
 
 **`GENERATE_ITR_FA.bat`** - Main runner with auto-checks (double-click this!)  
 **`SETUP_FOR_NEW_USER.bat`** - Install dependencies (first time only)  
-**`CLEAN_BEFORE_SHARING.bat`** - Remove personal data before sharing  
 
 ---
 
