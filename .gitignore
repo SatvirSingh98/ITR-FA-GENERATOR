@@ -1,0 +1,38 @@
+# Personal data - DO NOT COMMIT
+inputs/*.xlsx
+inputs/*.xls
+inputs/*.csv
+inputs/*.pdf
+outputs/*.json
+outputs/*.xlsx
+outputs/*.csv
+output_summary.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment (optional - can share venv or let users create their own)
+# venv/
+# Lib/
+# Scripts/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.log
+*.tmp
+~$*.xlsx
+~$*.xls

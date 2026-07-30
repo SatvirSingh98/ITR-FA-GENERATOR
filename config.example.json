@@ -1,0 +1,37 @@
+{
+  "_INSTRUCTIONS_1": "This script is designed for E*TRADE exports ONLY",
+  "_INSTRUCTIONS_2": "For Fidelity/Morgan Stanley/etc, you need different scripts",
+  "_INSTRUCTIONS_3": "Copy this file to config.json and edit your details",
+  "_NOTE": "table_a3_companies will be auto-populated - leave it empty!",
+
+  "target_year": 2025,
+
+  "custodial_account": {
+    "country_name": "UNITED STATES OF AMERICA",
+    "country_code": "2",
+    "financial_institution_name": "E*TRADE Securities LLC",
+    "financial_institution_address": "1271 Avenue of the Americas New York NY 10020 United States",
+    "zip_code": "10020",
+    "account_number": "YOUR_ACCOUNT_NUMBER",
+    "status": "BENEFICIAL_OWNER",
+    "account_opening_date": ""
+  },
+
+  "table_a3_companies": {},
+
+  "_EXAMPLE_FIDELITY": {
+    "_NOTE": "If you switch to Fidelity, update custodial_account like this:",
+    "custodial_account": {
+      "country_name": "UNITED STATES OF AMERICA",
+      "country_code": "2",
+      "financial_institution_name": "Fidelity Investments",
+      "financial_institution_address": "245 Summer Street Boston MA United States",
+      "zip_code": "02210",
+      "account_number": "YOUR_FIDELITY_ACCOUNT",
+      "status": "BENEFICIAL_OWNER",
+      "account_opening_date": ""
+    },
+    "_WARNING": "BUT - you'll need Fidelity's export files in their format!",
+    "_ACTION_NEEDED": "Modify itr_fa_engine.py to handle Fidelity's column names"
+  }
+}

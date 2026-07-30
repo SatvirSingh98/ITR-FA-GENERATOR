@@ -1,0 +1,54 @@
+╔═══════════════════════════════════════════════════════════════╗
+║          ITR SCHEDULE FA GENERATOR - START HERE               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+QUICK START - 3 STEPS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. EDIT CONFIG.JSON:
+   - Open: config.json
+   - Find: "account_number": "ENTER_YOUR_ETRADE_ACCOUNT_NUMBER"
+   - Replace with your E*TRADE account number
+   - Save
+
+2. ADD E*TRADE FILES:
+   - Export from E*TRADE:
+     • ByStatus_expanded.xlsx
+     • G&L_Expanded.xlsx
+   - Place in: inputs/ folder
+
+3. RUN:
+   - Double-click: GENERATE_ITR_FA.bat
+   - Script auto-checks everything first
+   - Wait ~1-2 minutes
+   - Check outputs/ folder
+
+WHAT IT DOES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Reads your E*TRADE files
+✓ Auto-discovers all companies (AMD, NVDA, etc.)
+✓ Fetches company details from Yahoo Finance
+✓ Auto-detects countries (USA, Canada, UK, etc.)
+✓ Scrapes stock prices for full year
+✓ Generates Schedule FA files
+
+OUTPUT FILES (in outputs/ folder):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- schedule_fa_2025-26.json  ← Upload to ITR portal
+- schedule_fa_2025-26.xlsx  ← Review with CA
+- schedule_fa_2025-26_table_a2.csv
+- schedule_fa_2025-26_table_a3.csv
+
+IMPORTANT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ For E*TRADE accounts ONLY
+⚠️ ONE account per run
+⚠️ See README.md for full details
+
+
+╔═══════════════════════════════════════════════════════════════╗
+║     Full documentation in README.md - Open and read it!      ║
+╚═══════════════════════════════════════════════════════════════╝
