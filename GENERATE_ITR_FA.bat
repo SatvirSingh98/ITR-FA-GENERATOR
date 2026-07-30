@@ -27,16 +27,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -c "import json; c=json.load(open('config.json')); acc=c.get('custodial_account',{}).get('account_number',''); exit(0 if acc and acc != 'ENTER_YOUR_ETRADE_ACCOUNT_NUMBER' else 1)" 2>nul
-if errorlevel 1 (
-    echo   [ERROR] Account number not set in config.json!
-    echo   [i] Open config.json and replace 'ENTER_YOUR_ETRADE_ACCOUNT_NUMBER'
-    echo   [i] with your actual E*TRADE account number
-    echo.
-    pause
-    exit /b 1
-)
-echo   [OK] Config is valid and account number is set
+REM Account number is optional - will be extracted from ClientStatement PDF
+echo   [OK] Config is valid
 echo.
 
 echo [2/5] Checking inputs folder...
@@ -142,3 +134,5 @@ echo.
 echo ================================================================
 echo   Logged output_summary.txt
 echo ================================================================
+echo.
+pause

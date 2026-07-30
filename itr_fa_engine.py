@@ -26,6 +26,16 @@ import requests
 
 warnings.filterwarnings('ignore')
 
+def save_config(config, config_file="config.json"):
+    """Save configuration back to config.json file."""
+    try:
+        with open(config_file, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[!] Error saving config: {e}")
+        return False
+
 def load_config(config_file="config.json"):
     """Load configuration from config.json file."""
     try:
@@ -219,28 +229,81 @@ class ScheduleFAApp:
             driver.get(url)
             time.sleep(3)  # Wait for page to load
 
-            # Extract company name
+            # Extract company info from asset-profile section
+            company_name = f"{symbol} Inc."  # Default
+            full_address = "United States"  # Default
+            zip_code = "00000"  # Default
+            country_name = "UNITED STATES OF AMERICA"  # Default
+            country_code = "2"  # Default (USA)
+
             try:
-                company_name = driver.find_element(By.CSS_SELECTOR, "h1").text.strip()
-            except:
-                company_name = f"{symbol} Inc."
+                # Find the asset-profile section using data-testid
+                profile_section = driver.find_element(By.CSS_SELECTOR, "[data-testid='asset-profile']")
 
-            # Extract address
+                # Extract company name (h3 within asset-profile)
+                try:
+                    company_name = profile_section.find_element(By.CSS_SELECTOR, "h3").text.strip()
+                except:
+                    print(f"[!] Could not extract company name from h3")
+
+                # Extract address from nested classes: .company-details > .company-info > .address
+                # The .address class has 3 divs: [street, city+state+zip, country]
+                # We only need first 2 divs (street + city/state/zip)
+                try:
+                    # All are class names, not tags
+                    address_element = profile_section.find_element(By.CSS_SELECTOR, ".company-details .company-info .address")
+
+                    # Get all div children (3 divs: street, city+state+zip, country)
+                    address_divs = address_element.find_elements(By.TAG_NAME, "div")
+
+                    # Extract country from third div (for country detection)
+                    country_text = ""
+                    if len(address_divs) >= 3:
+                        country_text = address_divs[2].text.strip()
+
+                    # Extract zip from the second div (city, state, zip)
+                    # Zip is the last word (after last space) that's 5 digits
+                    if len(address_divs) >= 2:
+                        city_state_zip = address_divs[1].text.strip()
+                        # Split by space and get last element as zip
+                        parts = city_state_zip.split()
+                        if parts and len(parts[-1]) == 5 and parts[-1].isdigit():
+                            zip_code = parts[-1]
+                            # Remove zip from city_state_zip for address
+                            city_state_no_zip = " ".join(parts[:-1])
+                        else:
+                            city_state_no_zip = city_state_zip
+
+                        # Build full address from first div (street) + second div without zip
+                        street = address_divs[0].text.strip() if len(address_divs) >= 1 else ""
+                        full_address = f"{street} {city_state_no_zip}".strip()
+
+                        # Use country text for detection (more accurate than address)
+                        if country_text:
+                            country_name, country_code = self._detect_country(country_text)
+                    else:
+                        # Fallback if structure is different
+                        address_parts = [address_divs[i].text.strip() for i in range(min(2, len(address_divs))) if address_divs[i].text.strip()]
+                        full_address = " ".join(address_parts)
+
+                except Exception as e:
+                    print(f"[!] Could not extract address element: {e}")
+
+            except Exception as e:
+                print(f"[!] Could not find asset-profile section: {e}")
+
+            # Detect country from address (only if not already detected from third div)
             try:
-                address_element = driver.find_element(By.CSS_SELECTOR, "p[data-testid='address']")
-                full_address = address_element.text.strip()
-                # Clean up address (remove extra newlines)
-                full_address = " ".join(full_address.split())
+                if not country_name or country_name == "":
+                    country_name, country_code = self._detect_country(full_address)
             except:
-                full_address = "United States"
+                country_name, country_code = self._detect_country(full_address)
 
-            # Detect country from address
-            country_name, country_code = self._detect_country(full_address)
-
-            # Extract zip code from address
-            import re
-            zip_match = re.search(r'\b(\d{5})\b', full_address)
-            zip_code = zip_match.group(1) if zip_match else "00000"
+            # If zip code wasn't extracted from div structure, try regex as fallback
+            if not zip_code or zip_code == "":
+                import re
+                zip_match = re.search(r'\b(\d{5})\b', full_address)
+                zip_code = zip_match.group(1) if zip_match else "00000"
 
             print(f"[OK] {company_name}")
             print(f"     Country: {country_name} (Code: {country_code})")
@@ -302,6 +365,18 @@ class ScheduleFAApp:
                 # Read first page
                 page = pdf_reader.pages[0]
                 text = page.extract_text()
+
+                # Extract account number (E*TRADE format: "146 - 239025 - 205 - 4 - 1" at top of statement)
+                # The main account number is the first 9 digits (146239025)
+                account_match = re.search(r'(\d{3})\s*-\s*(\d{6})\s*-\s*\d{3}\s*-\s*\d\s*-\s*\d', text)
+                if account_match:
+                    account_number = account_match.group(1) + account_match.group(2)  # Combine first two parts
+                    print(f"[OK] Found Account Number: {account_number}")
+                    # Store it for later use
+                    self.extracted_account_number = account_number
+                else:
+                    self.extracted_account_number = None
+                    print(f"[!] Could not extract account number from ClientStatement")
 
                 # Extract "Ending Total Value (as of MM/DD/YY) $XX,XXX.XX"
                 match = re.search(r'Ending Total Value.*?\$([0-9,]+\.[0-9]{2})', text)
@@ -852,7 +927,7 @@ class ScheduleFAApp:
             # Determine plan type from G&L
             plan_type = str(row.get('Plan Type', ''))
             nature_prefix = "ESPP" if "ESPP" in plan_type else "RSU"
-            nature = f"{nature_prefix} ({qty} shares)" if qty != 1 else f"{nature_prefix} ({qty} share)"
+            nature = f"{nature_prefix} ({qty} shares) - Sold" if qty != 1 else f"{nature_prefix} ({qty} share) - Sold"
 
             acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
             sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
@@ -981,13 +1056,30 @@ class ScheduleFAApp:
         # Build Table A2 entry from config (single custodial account)
         acc_config = config.get("custodial_account", {})
 
+        # Use extracted account number from ClientStatement if available, then config, then parameter, then empty
+        extracted = getattr(self, 'extracted_account_number', None)
+        from_config = acc_config.get("account_number")
+
+        if extracted:
+            final_account_no = extracted
+            print(f"[i] Using account number from ClientStatement: {final_account_no}")
+        elif from_config:
+            final_account_no = from_config
+            print(f"[i] Using account number from config.json: {final_account_no}")
+        elif account_no:
+            final_account_no = account_no
+            print(f"[i] Using account number from parameter: {final_account_no}")
+        else:
+            final_account_no = ""
+            print(f"[i] Account number not found - leaving empty")
+
         custodial_accounts = [{
             "CountryName": acc_config.get("country_name", "UNITED STATES OF AMERICA"),
             "CountryCodeExcludingIndia": int(acc_config.get("country_code", 2)),
             "FinancialInstName": self.clean_text_for_itr(acc_config.get("financial_institution_name", "E*TRADE Securities LLC")),
             "FinancialInstAddress": self.clean_text_for_itr(acc_config.get("financial_institution_address", "1271 Avenue of the Americas New York NY 10020 United States")),
             "ZipCode": str(acc_config.get("zip_code", "10020")),
-            "AccountNumber": str(acc_config.get("account_number", account_no)),
+            "AccountNumber": str(final_account_no),
             "Status": acc_config.get("status", "BENEFICIAL_OWNER"),
             "AccOpenDate": acc_config.get("account_opening_date", ""),
             "PeakBalanceDuringPeriod": total_peak_account_inr,
@@ -1026,8 +1118,28 @@ class ScheduleFAApp:
         df_a2 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignCustodialAcc"])
         df_a3 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
 
-        # ZipCode and AccountNumber are stored as strings in JSON (for ITR portal)
-        # but displayed as numbers in Excel (to avoid green warning triangles)
+        # Round all numeric values to integers for Excel display (A2 and A3)
+        numeric_cols_a2 = ['PeakBalanceDuringPeriod', 'ClosingBalance', 'GrossAmtPaidCredited']
+        for col in numeric_cols_a2:
+            if col in df_a2.columns:
+                df_a2[col] = df_a2[col].round(0).astype(int)
+
+        numeric_cols_a3 = ['InitialValOfInvstmnt', 'PeakBalanceDuringPeriod', 'ClosingBalance',
+                           'TotGrossAmtPaidCredited', 'TotGrossProceeds']
+        for col in numeric_cols_a3:
+            if col in df_a3.columns:
+                df_a3[col] = df_a3[col].round(0).astype(int)
+
+        # Force ZipCode, AccountNumber, and CountryCode to be text (prevent Excel auto-conversion)
+        if 'ZipCode' in df_a2.columns:
+            df_a2['ZipCode'] = df_a2['ZipCode'].astype(str)
+        if 'AccountNumber' in df_a2.columns:
+            df_a2['AccountNumber'] = df_a2['AccountNumber'].astype(str)
+
+        if 'ZipCode' in df_a3.columns:
+            df_a3['ZipCode'] = df_a3['ZipCode'].astype(str)
+        if 'CountryCodeExcludingIndia' in df_a3.columns:
+            df_a3['CountryCodeExcludingIndia'] = df_a3['CountryCodeExcludingIndia'].astype(str)
 
         # Create reference sheet with daily AMD prices and TTBR rates (simplified)
         df_reference = self._daily_account_matrix[['Date', 'Stock_Close_USD', 'TTBR',
@@ -1209,26 +1321,28 @@ class ScheduleFAApp:
                     tax_rate = 0.312  # 31.2%
 
                 # Use _GrossProceeds (from G&L) for ALL sales (not TotGrossProceeds which is 0 for future sales)
-                gross_proceeds = tranche['_GrossProceeds']
-                capital_gain = round(gross_proceeds - tranche['InitialValOfInvstmnt'], 2)
-                tax_amount = round(capital_gain * tax_rate, 2)
+                import math
+                gross_proceeds = math.ceil(tranche['_GrossProceeds'])  # Round UP proceeds
+                cost_basis = math.ceil(tranche['InitialValOfInvstmnt'])  # Round UP cost basis
+                capital_gain = gross_proceeds - cost_basis  # Already rounded up
+                tax_amount = math.ceil(capital_gain * tax_rate)  # Round UP tax
 
-                # Calculate advance tax schedule based on sale date
+                # Calculate advance tax schedule based on sale date (always round UP)
                 sale_month = sale_date.month
                 if sale_month <= 6:  # Sold before July 15
-                    adv_tax_jul = round(tax_amount * 0.15, 2)
-                    adv_tax_sep = round(tax_amount * 0.45, 2)
-                    adv_tax_dec = round(tax_amount * 0.75, 2)
+                    adv_tax_jul = math.ceil(tax_amount * 0.15)
+                    adv_tax_sep = math.ceil(tax_amount * 0.45)
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
                     adv_tax_mar = tax_amount
                 elif sale_month <= 8:  # Sold between July 16 - Sep 15
                     adv_tax_jul = 0
-                    adv_tax_sep = round(tax_amount * 0.45, 2)
-                    adv_tax_dec = round(tax_amount * 0.75, 2)
+                    adv_tax_sep = math.ceil(tax_amount * 0.45)
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
                     adv_tax_mar = tax_amount
                 elif sale_month <= 11:  # Sold between Sep 16 - Dec 15
                     adv_tax_jul = 0
                     adv_tax_sep = 0
-                    adv_tax_dec = round(tax_amount * 0.75, 2)
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
                     adv_tax_mar = tax_amount
                 else:  # Sold between Dec 16 - Mar 15
                     adv_tax_jul = 0
@@ -1237,21 +1351,21 @@ class ScheduleFAApp:
                     adv_tax_mar = tax_amount
 
                 capital_gains_data.append({
-                    'Nature': tranche['NatureOfEntity'].replace(' Sold', ''),
+                    'Nature': tranche['NatureOfEntity'].replace(' Sold', '').replace(' - Sold', ''),
                     'Quantity': int(qty_str) if qty_str else 0,
                     'Acquisition Date': tranche['InterestAcquiringDate'],
                     'Sale Date': tranche.get('_SaleDate', ''),
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
-                    'Cost Basis (INR)': tranche['InitialValOfInvstmnt'],
-                    'Sale Proceeds (INR)': gross_proceeds,
-                    'Capital Gain (INR)': capital_gain,
+                    'Cost Basis (INR)': cost_basis,  # Rounded up
+                    'Sale Proceeds (INR)': gross_proceeds,  # Rounded up
+                    'Capital Gain (INR)': capital_gain,  # Rounded up
                     'Tax Rate': f"{tax_rate*100}%",
-                    'Tax Amount (INR)': tax_amount,
-                    'Adv Tax by Jul 15 (15%)': adv_tax_jul,
-                    'Adv Tax by Sep 15 (45%)': adv_tax_sep,
-                    'Adv Tax by Dec 15 (75%)': adv_tax_dec,
-                    'Adv Tax by Mar 15 (100%)': adv_tax_mar
+                    'Tax Amount (INR)': tax_amount,  # Rounded up
+                    'Adv Tax by Jul 15 (15%)': adv_tax_jul,  # Rounded up
+                    'Adv Tax by Sep 15 (45%)': adv_tax_sep,  # Rounded up
+                    'Adv Tax by Dec 15 (75%)': adv_tax_dec,  # Rounded up
+                    'Adv Tax by Mar 15 (100%)': adv_tax_mar  # Rounded up
                 })
 
         # Create two separate tables for Capital Gains sheet
@@ -1328,6 +1442,17 @@ class ScheduleFAApp:
             'Note': [f'No sales excluded from A3 for FY {self.calendar_year}',
                      'All sales in G&L file are either in current FY or future years']
         })
+
+        # Round numeric values in Excluded A3 sheet
+        if excluded_a3_data:
+            numeric_cols_excluded = ['Initial Value (INR)', 'Peak Value (INR)', 'Sale Proceeds (INR)',
+                                      'Adjusted Cost Basis Per Share (USD)']
+            for col in numeric_cols_excluded:
+                if col in df_excluded_a3.columns:
+                    if col == 'Adjusted Cost Basis Per Share (USD)':
+                        df_excluded_a3[col] = df_excluded_a3[col].round(2)  # Keep 2 decimals for USD per share
+                    else:
+                        df_excluded_a3[col] = df_excluded_a3[col].round(0).astype(int)  # Round INR to integers
 
         with pd.ExcelWriter(excel_filename, engine="openpyxl") as writer:
             df_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
@@ -1534,6 +1659,12 @@ class ScheduleFAApp:
         csv_a3_filename = os.path.join(output_dir, f"schedule_fa_{self.indian_fy}_table_a3.csv")
 
         # Table A2 CSV with ITR-compliant headers and column order
+        # First, round all numeric values in the source data to integers
+        for acc in output_data["ScheduleFA"]["DtlsForeignCustodialAcc"]:
+            acc["PeakBalanceDuringPeriod"] = round(acc["PeakBalanceDuringPeriod"])
+            acc["ClosingBalance"] = round(acc["ClosingBalance"])
+            acc["GrossAmtPaidCredited"] = round(acc["GrossAmtPaidCredited"])
+
         df_a2_csv = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignCustodialAcc"])
         df_a2_csv = df_a2_csv.rename(columns={
             "CountryName": "Country/Region name",
@@ -1549,6 +1680,15 @@ class ScheduleFAApp:
             "NatureOfAmount": "Nature of Amount",
             "GrossAmtPaidCredited": "Amount"
         })
+        # Format dates to DD/MM/YYYY (ITR portal requirement)
+        if "Account opening date" in df_a2_csv.columns:
+            df_a2_csv["Account opening date"] = pd.to_datetime(df_a2_csv["Account opening date"], errors='coerce').dt.strftime('%d/%m/%Y')
+
+        # Round numeric columns to integers (ITR portal requirement)
+        df_a2_csv["Peak Balance During the Period"] = df_a2_csv["Peak Balance During the Period"].round(0).astype(int)
+        df_a2_csv["Closing balance"] = df_a2_csv["Closing balance"].round(0).astype(int)
+        df_a2_csv["Amount"] = df_a2_csv["Amount"].round(0).astype(int)
+
         # Reorder columns to match ITR format exactly
         df_a2_csv = df_a2_csv[[
             "Country/Region name", "Country Name and Code", "Name of financial institution",
@@ -1556,9 +1696,19 @@ class ScheduleFAApp:
             "Account opening date", "Peak Balance During the Period", "Closing balance",
             "Nature of Amount", "Amount"
         ]]
-        df_a2_csv.to_csv(csv_a2_filename, index=False, quoting=1)  # quoting=1 = QUOTE_ALL
+        # Write A2 CSV (ITR portal format requirement)
+        # Try simple format without quotes or trailing commas
+        df_a2_csv.to_csv(csv_a2_filename, index=False, quoting=0)  # quoting=0 = QUOTE_MINIMAL
 
         # Table A3 CSV with ITR-compliant headers
+        # First, round all numeric values in the source data to integers
+        for holding in output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"]:
+            holding["InitialValOfInvstmnt"] = round(holding["InitialValOfInvstmnt"])
+            holding["PeakBalanceDuringPeriod"] = round(holding["PeakBalanceDuringPeriod"])
+            holding["ClosingBalance"] = round(holding["ClosingBalance"])
+            holding["TotGrossAmtPaidCredited"] = round(holding["TotGrossAmtPaidCredited"])
+            holding["TotGrossProceeds"] = round(holding["TotGrossProceeds"])
+
         df_a3_csv = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
         df_a3_csv = df_a3_csv.rename(columns={
             "CountryName": "Country/Region name",
@@ -1574,7 +1724,29 @@ class ScheduleFAApp:
             "TotGrossAmtPaidCredited": "Total gross amount paid/credited with respect to the holding during the period",
             "TotGrossProceeds": "Total gross proceeds from sale or redemption of investment during the period"
         })
-        df_a3_csv.to_csv(csv_a3_filename, index=False, quoting=1)
+
+        # Keep dates in YYYY-MM-DD ISO format (ITR portal requirement)
+        # This avoids DD/MM vs MM/DD ambiguity
+        if "Date of acquiring the interest" in df_a3_csv.columns:
+            df_a3_csv["Date of acquiring the interest"] = pd.to_datetime(df_a3_csv["Date of acquiring the interest"], errors='coerce').dt.strftime('%Y-%m-%d')
+
+        # Force text columns to be treated as text (prevent Excel "leading zeros" warning)
+        # Add ="value" format for text fields
+        text_cols_a3 = ["Country Name and Code", "ZIP Code"]
+        for col in text_cols_a3:
+            if col in df_a3_csv.columns:
+                df_a3_csv[col] = df_a3_csv[col].astype(str)
+
+        # Round numeric columns to integers (ITR portal requirement)
+        df_a3_csv["Initial value of the investment"] = df_a3_csv["Initial value of the investment"].round(0).astype(int)
+        df_a3_csv["Peak value of investment during the Period"] = df_a3_csv["Peak value of investment during the Period"].round(0).astype(int)
+        df_a3_csv["Closing balance"] = df_a3_csv["Closing balance"].round(0).astype(int)
+        df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"] = df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"].round(0).astype(int)
+        df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"] = df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"].round(0).astype(int)
+
+        # Write A3 CSV (ITR portal format requirement)
+        # Try simple format without quotes or trailing commas
+        df_a3_csv.to_csv(csv_a3_filename, index=False, quoting=0)  # quoting=0 = QUOTE_MINIMAL
 
         print(f"\n[SUCCESS] Finished processing calendar year {self.calendar_year}!")
         print(f"    - JSON Output:  {json_filename}")
@@ -1612,12 +1784,10 @@ if __name__ == "__main__":
     custodial_acc = config.get("custodial_account", {})
     ACCOUNT_NUMBER = custodial_acc.get("account_number", "")
 
-    # Validate account number
+    # Account number can be extracted from ClientStatement PDF, so it's optional in config
     if not ACCOUNT_NUMBER or ACCOUNT_NUMBER == "ENTER_YOUR_ETRADE_ACCOUNT_NUMBER":
-        print("\n[ERROR] Account number not set in config.json!")
-        print("[!] Please edit config.json and replace 'ENTER_YOUR_ETRADE_ACCOUNT_NUMBER'")
-        print("[!] with your actual E*TRADE account number.\n")
-        raise ValueError("Account number is required in config.json")
+        print("[i] Account number not in config.json - will extract from ClientStatement PDF")
+        ACCOUNT_NUMBER = ""  # Will be extracted from ClientStatement
 
     # Input file paths - auto-detect from inputs folder
     BYSTATUS_FILE = "inputs/ByStatus_expanded.xlsx"
@@ -1669,6 +1839,10 @@ if __name__ == "__main__":
 
         # Update config with discovered companies
         config["table_a3_companies"] = config_companies
+
+        # Save updated config back to file for next run
+        save_config(config)
+        print("[OK] Saved company info to config.json for next run")
         print()
 
         # Now process E*TRADE exports with updated config
