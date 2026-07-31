@@ -1,5 +1,8 @@
 openpyxl
 pandas
+PyPDF2
+python-dateutil
 requests
 selenium
 webdriver-manager
+yfinance
