@@ -72,21 +72,47 @@ REM Check if venv exists
 if not exist venv\Scripts\python.exe (
     echo   [i] Python venv not found - checking system Python...
 
-    REM Check if Python 3.14+ is available
+    REM Check if Python is available
     python --version >nul 2>&1
     if errorlevel 1 (
         echo   [ERROR] Python not found on system!
         echo.
-        echo   Please install Python 3.14+ from python.org
+        echo   Please install Python 3.11+ from python.org
         echo   Make sure to check "Add Python to PATH" during installation
         echo.
         pause
         exit /b 1
     )
 
-    REM Check Python version
-    for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYVER=%%i
-    echo   [OK] Found Python %PYVER%
+    REM Get Python version and validate
+    for /f "tokens=2 delims= " %%i in ('python --version 2^>^&1') do set PYVER=%%i
+
+    REM Extract major and minor version (e.g., 3.11 from 3.11.5)
+    for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
+        set PYMAJOR=%%a
+        set PYMINOR=%%b
+    )
+
+    REM Check if Python 3.11+
+    if %PYMAJOR% LSS 3 (
+        echo   [ERROR] Python %PYVER% is too old!
+        echo   [i] This tool requires Python 3.11 or newer
+        echo   [i] Download from: https://python.org/downloads/
+        echo.
+        pause
+        exit /b 1
+    )
+
+    if %PYMAJOR% EQU 3 if %PYMINOR% LSS 11 (
+        echo   [ERROR] Python %PYVER% is too old!
+        echo   [i] This tool requires Python 3.11 or newer
+        echo   [i] Download from: https://python.org/downloads/
+        echo.
+        pause
+        exit /b 1
+    )
+
+    echo   [OK] Found Python %PYVER% (compatible)
 
     REM Create venv automatically
     echo   [i] Creating virtual environment...

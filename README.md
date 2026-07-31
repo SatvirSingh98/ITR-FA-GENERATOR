@@ -132,7 +132,7 @@ For sales in the current/future FY, the tool calculates advance tax payment sche
 **`GENERATE_ITR_FA.bat`** - All-in-one runner (zero-config setup)
 - **First run:** Auto-creates venv + installs packages + generates output
 - **Next runs:** Just generates output
-- Auto-validates Python version (requires 3.14+)
+- Auto-validates Python version (requires 3.11+)
 - Auto-creates config.json from example
 - **Just double-click this file!**  
 
@@ -158,7 +158,7 @@ Removes your personal data:
 - **Auto-updated daily** via GitHub Actions at 9:00 PM IST (see [AUTOMATION_SETUP.md](AUTOMATION_SETUP.md))
 
 **Requirements:**
-- Python 3.14+ (auto-creates venv on first run)
+- Python 3.11+ (auto-creates venv on first run)
 - Chrome browser
 - Internet connection
 
