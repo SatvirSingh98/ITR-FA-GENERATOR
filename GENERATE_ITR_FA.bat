@@ -62,6 +62,9 @@ echo [3/5] Checking outputs folder...
 if not exist outputs\ (
     echo   [i] Creating outputs folder...
     mkdir outputs
+) else (
+    echo   [i] Cleaning previous outputs...
+    del /Q outputs\* >nul 2>&1
 )
 echo   [OK] Outputs folder ready
 echo.
@@ -70,64 +73,34 @@ echo [4/5] Checking Python environment...
 
 REM Check if venv exists
 if not exist venv\Scripts\python.exe (
-    echo   [i] Python venv not found - checking system Python...
-
     REM Check if Python is available
     python --version >nul 2>&1
     if errorlevel 1 (
         echo   [ERROR] Python not found on system!
-        echo.
         echo   Please install Python 3.11+ from python.org
         echo   Make sure to check "Add Python to PATH" during installation
-        echo.
         pause
         exit /b 1
     )
 
-    REM Get Python version and validate
-    for /f "tokens=2 delims= " %%i in ('python --version 2^>^&1') do set PYVER=%%i
-
-    REM Extract major and minor version (e.g., 3.11 from 3.11.5)
-    for /f "tokens=1,2 delims=." %%a in ("%PYVER%") do (
-        set PYMAJOR=%%a
-        set PYMINOR=%%b
-    )
-
-    REM Check if Python 3.11+
-    if %PYMAJOR% LSS 3 (
-        echo   [ERROR] Python %PYVER% is too old!
-        echo   [i] This tool requires Python 3.11 or newer
-        echo   [i] Download from: https://python.org/downloads/
-        echo.
-        pause
-        exit /b 1
-    )
-
-    if %PYMAJOR% EQU 3 if %PYMINOR% LSS 11 (
-        echo   [ERROR] Python %PYVER% is too old!
-        echo   [i] This tool requires Python 3.11 or newer
-        echo   [i] Download from: https://python.org/downloads/
-        echo.
-        pause
-        exit /b 1
-    )
-
-    echo   [OK] Found Python %PYVER% (compatible)
-
-    REM Create venv automatically
-    echo   [i] Creating virtual environment...
-    python -m venv venv
-
+    REM Check Python version
+    python -c "import sys; exit(0 if (sys.version_info.major == 3 and sys.version_info.minor >= 11) or sys.version_info.major > 3 else 1)" 2>nul
     if errorlevel 1 (
-        echo   [ERROR] Failed to create virtual environment!
-        echo   [i] Make sure Python venv module is installed
-        echo.
+        for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYVER=%%i
+        echo   [ERROR] Python is too old - requires 3.11+
+        echo   Download from: https://python.org/downloads/
         pause
         exit /b 1
     )
 
-    echo   [OK] Virtual environment created
-    echo.
+    REM Create venv
+    echo   [i] Creating Python environment - first run only...
+    python -m venv venv
+    if errorlevel 1 (
+        echo   [ERROR] Failed to create venv
+        pause
+        exit /b 1
+    )
 )
 
 REM Check if packages are installed
@@ -210,7 +183,7 @@ echo.
 echo Next steps:
 echo   1. Review Excel file for accuracy
 echo   2. Share with your CA for verification
-echo   3. Upload JSON to ITR e-filing portal
+echo   3. Upload CSV to ITR e-filing portal
 echo.
 echo ================================================================
 echo   Logged output_summary.txt
