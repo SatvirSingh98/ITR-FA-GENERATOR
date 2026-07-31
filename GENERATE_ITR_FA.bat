@@ -12,11 +12,19 @@ REM ============================================================
 
 echo [1/5] Checking config.json...
 if not exist config.json (
-    echo   [ERROR] config.json not found!
-    echo   [i] Copy config.example.json to config.json and edit it
-    echo.
-    pause
-    exit /b 1
+    if exist config.example.json (
+        echo   [i] First run detected - creating config.json from example...
+        copy config.example.json config.json >nul
+        echo   [OK] Created config.json
+        echo   [!] IMPORTANT: Edit config.json with your account details if needed
+        echo.
+    ) else (
+        echo   [ERROR] config.json not found!
+        echo   [i] Copy config.example.json to config.json and edit it
+        echo.
+        pause
+        exit /b 1
+    )
 )
 
 python -c "import json; json.load(open('config.json'))" 2>nul
@@ -61,17 +69,37 @@ echo.
 echo [4/5] Checking Python environment...
 if not exist venv\Scripts\python.exe (
     echo   [ERROR] Python venv not found!
-    echo   [i] Run SETUP_FOR_NEW_USER.bat first
+    echo.
+    echo   Please create a Python virtual environment first:
+    echo     python -m venv venv
     echo.
     pause
     exit /b 1
 )
+
+REM Check if packages are installed
 venv\Scripts\python.exe -c "import pandas, selenium, openpyxl" >nul 2>&1
 if errorlevel 1 (
-    echo   [WARNING] Required packages not installed
-    echo   [i] Installing now ^(first time only^)...
-    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
-    echo   [OK] Packages installed
+    echo   [i] First-time setup detected - installing packages...
+    echo   [i] This may take 2-5 minutes, please wait...
+    echo.
+
+    REM Upgrade pip
+    venv\Scripts\python.exe -m pip install --upgrade pip --quiet
+
+    REM Install packages
+    venv\Scripts\python.exe -m pip install -r requirements.txt
+
+    if errorlevel 1 (
+        echo   [ERROR] Package installation failed!
+        echo   [i] Check your internet connection and try again.
+        echo.
+        pause
+        exit /b 1
+    )
+
+    echo   [OK] Packages installed successfully
+    echo.
 )
 echo   [OK] Python environment ready
 echo.
@@ -121,10 +149,10 @@ echo   SUCCESS! Schedule FA Generated
 echo ================================================================
 echo.
 echo Check the outputs/ folder for:
-echo   - schedule_fa_2025-26.json  (Upload to ITR portal)
+echo   - schedule_fa_2025-26.json  (Review with CA)
 echo   - schedule_fa_2025-26.xlsx  (Review with CA)
-echo   - schedule_fa_2025-26_table_a2.csv
-echo   - schedule_fa_2025-26_table_a3.csv
+echo   - schedule_fa_2025-26_table_a2.csv  (Upload to ITR portal)
+echo   - schedule_fa_2025-26_table_a3.csv  (Upload to ITR portal)
 echo.
 echo Next steps:
 echo   1. Review Excel file for accuracy

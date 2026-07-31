@@ -132,8 +132,11 @@ For sales in the current/future FY, the tool calculates advance tax payment sche
 
 ## BAT Files
 
-**`GENERATE_ITR_FA.bat`** - Main runner with auto-checks (double-click this!)  
-**`SETUP_FOR_NEW_USER.bat`** - Install dependencies (first time only)  
+**`GENERATE_ITR_FA.bat`** - All-in-one runner (auto-setup + generation)
+- Auto-detects first run and installs dependencies
+- Validates config and input files
+- Runs the generator
+- **Just double-click this file!**  
 
 ---
 
