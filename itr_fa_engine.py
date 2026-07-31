@@ -102,28 +102,10 @@ class ScheduleFAApp:
         Args:
             extra_dates: List of specific dates before FY to include (e.g., ['2024-11-08', '2024-09-15'])
         """
-        # Use our own SBI forex fetcher instead of direct GitHub download
+        # Read SBI forex rates from local CSV (updated daily by GitHub Action at 9 PM IST)
         df = None
-        try:
-            from sbi_forex_fetcher import fetch_sbi_forex_rates
 
-            print("[*] Using SBI forex fetcher (tries SBI PDF first, then GitHub fallback)")
-            df = fetch_sbi_forex_rates()
-
-            # Convert DATE column to Date and extract TT BUY as TTBR
-            if 'DATE' in df.columns and 'TT BUY' in df.columns:
-                df['Date'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
-                df['TTBR'] = pd.to_numeric(df['TT BUY'], errors='coerce')
-                # Keep only Date and TTBR for compatibility
-                df = df[['Date', 'TTBR']].copy()
-            else:
-                raise ValueError(f"Fetcher returned unexpected format. Columns: {list(df.columns)}")
-
-        except Exception as e:
-            print(f"[!] SBI forex fetcher failed: {e}")
-            print(f"[!] Falling back to local CSV or legacy GitHub download")
-
-        # If our fetcher failed, try reading local CSV first
+        # Try reading local CSV first (primary source - updated by GitHub Action)
         if df is None:
             local_csv = os.path.join('data', 'SBI_FOREX_CARD_RATES_USD.csv')
             if os.path.exists(local_csv):
@@ -1026,79 +1008,79 @@ class ScheduleFAApp:
         if config.get('disclose_unvested_rsu', False):
             try:
                 print("\n[*] Checking for unvested RSUs (conservative disclosure enabled)...")
-                df_unvested = pd.read_excel(bystatus_file, sheet_name='Unvested')
+                df_unvested = pd.read_excel(bystatus_path, sheet_name='Unvested')
 
-            # Filter for summary row with total unvested (last row usually has Symbol=AMD and totals)
-            # Or aggregate from individual rows
-            total_unvested = 0
-            earliest_grant_date = None
+                # Filter for summary row with total unvested (last row usually has Symbol=AMD and totals)
+                # Or aggregate from individual rows
+                total_unvested = 0
+                earliest_grant_date = None
 
-            # Find rows with Symbol = AMD and Unvested Qty.
-            unvested_grants = df_unvested[
-                (df_unvested['Symbol'] == 'AMD') &
-                (df_unvested['Plan Type'].notna()) &
-                (df_unvested['Unvested Qty.'].notna()) &
-                (df_unvested['Unvested Qty.'] > 0)
-            ]
+                # Find rows with Symbol = AMD and Unvested Qty.
+                unvested_grants = df_unvested[
+                    (df_unvested['Symbol'] == 'AMD') &
+                    (df_unvested['Plan Type'].notna()) &
+                    (df_unvested['Unvested Qty.'].notna()) &
+                    (df_unvested['Unvested Qty.'] > 0)
+                ]
 
-            if not unvested_grants.empty:
-                total_unvested = int(unvested_grants['Unvested Qty.'].sum())
+                if not unvested_grants.empty:
+                    total_unvested = int(unvested_grants['Unvested Qty.'].sum())
 
-                # Get earliest grant date
-                grant_dates = pd.to_datetime(unvested_grants['Grant Date'], errors='coerce').dropna()
-                if not grant_dates.empty:
-                    earliest_grant_date = grant_dates.min().strftime('%Y-%m-%d')
+                    # Get earliest grant date
+                    grant_dates = pd.to_datetime(unvested_grants['Grant Date'], errors='coerce').dropna()
+                    if not grant_dates.empty:
+                        earliest_grant_date = grant_dates.min().strftime('%Y-%m-%d')
+                    else:
+                        # Use Dec 31 of current year if no grant date found
+                        earliest_grant_date = self.end_date
+
+                    print(f"[OK] Found {total_unvested} unvested RSU units")
+                    print(f"    Earliest grant date: {earliest_grant_date}")
+
+                    # Get AMD company details
+                    comp_info = self.get_company_details("AMD")
+                    df_matrix = comp_info["matrix"]
+
+                    # Calculate peak value (unvested qty x peak price x peak TTBR)
+                    if not df_matrix.empty:
+                        peak_idx = df_matrix['Valuation_Per_Share_INR'].idxmax()
+                        peak_price_inr = df_matrix.loc[peak_idx, 'Valuation_Per_Share_INR']
+                        peak_val = round(total_unvested * peak_price_inr, 2)
+                    else:
+                        peak_val = 0
+
+                    # Calculate closing value (unvested qty x Dec 31 price x Dec 31 TTBR)
+                    close_row = df_matrix[df_matrix['Date'] == self.end_date]
+                    if not close_row.empty:
+                        close_price_inr = close_row['Valuation_Per_Share_INR'].values[0]
+                        close_val = round(total_unvested * close_price_inr, 2)
+                    else:
+                        # Use last available price
+                        close_price_inr = df_matrix['Valuation_Per_Share_INR'].iloc[-1]
+                        close_val = round(total_unvested * close_price_inr, 2)
+
+                    # Add unvested RSUs as one aggregated A3 row
+                    equity_tranches.append({
+                        "CountryName": "UNITED STATES OF AMERICA",
+                        "CountryCodeExcludingIndia": 2,
+                        "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
+                        "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
+                        "ZipCode": str(comp_info["zip"]),
+                        "NatureOfEntity": f"RSU Unvested Grants - Beneficial Interest ({total_unvested} units)",
+                        "InterestAcquiringDate": earliest_grant_date,
+                        "InitialValOfInvstmnt": 0,  # 0 because not acquired yet (only a promise)
+                        "PeakBalanceDuringPeriod": peak_val,
+                        "ClosingBalance": close_val,
+                        "_FMV_USD": 0,  # N/A for unvested
+                        "TotGrossAmtPaidCredited": 0,  # No dividends on unvested RSUs
+                        "TotGrossProceeds": 0
+                    })
+
+                    print(f"    Initial Value: Rs. 0 (not acquired yet)")
+                    print(f"    Peak Value: Rs. {peak_val:,.2f}")
+                    print(f"    Closing Value: Rs. {close_val:,.2f}")
                 else:
-                    # Use Dec 31 of current year if no grant date found
-                    earliest_grant_date = self.end_date
-
-                print(f"[OK] Found {total_unvested} unvested RSU units")
-                print(f"    Earliest grant date: {earliest_grant_date}")
-
-                # Get AMD company details
-                comp_info = self.get_company_details("AMD")
-                df_matrix = comp_info["matrix"]
-
-                # Calculate peak value (unvested qty × peak price × peak TTBR)
-                if not df_matrix.empty:
-                    peak_idx = df_matrix['Valuation_Per_Share_INR'].idxmax()
-                    peak_price_inr = df_matrix.loc[peak_idx, 'Valuation_Per_Share_INR']
-                    peak_val = round(total_unvested * peak_price_inr, 2)
-                else:
-                    peak_val = 0
-
-                # Calculate closing value (unvested qty × Dec 31 price × Dec 31 TTBR)
-                close_row = df_matrix[df_matrix['Date'] == self.end_date]
-                if not close_row.empty:
-                    close_price_inr = close_row['Valuation_Per_Share_INR'].values[0]
-                    close_val = round(total_unvested * close_price_inr, 2)
-                else:
-                    # Use last available price
-                    close_price_inr = df_matrix['Valuation_Per_Share_INR'].iloc[-1]
-                    close_val = round(total_unvested * close_price_inr, 2)
-
-                # Add unvested RSUs as one aggregated A3 row
-                equity_tranches.append({
-                    "CountryName": "UNITED STATES OF AMERICA",
-                    "CountryCodeExcludingIndia": 2,
-                    "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
-                    "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
-                    "ZipCode": str(comp_info["zip"]),
-                    "NatureOfEntity": f"RSU Unvested Grants - Beneficial Interest ({total_unvested} units)",
-                    "InterestAcquiringDate": earliest_grant_date,
-                    "InitialValOfInvstmnt": 0,  # 0 because not acquired yet (only a promise)
-                    "PeakBalanceDuringPeriod": peak_val,
-                    "ClosingBalance": close_val,
-                    "_FMV_USD": 0,  # N/A for unvested
-                    "TotGrossAmtPaidCredited": 0,  # No dividends on unvested RSUs
-                    "TotGrossProceeds": 0
-                })
-
-                print(f"    Initial Value: Rs. 0 (not acquired yet)")
-                print(f"    Peak Value: Rs. {peak_val:,.2f}")
-                print(f"    Closing Value: Rs. {close_val:,.2f}")
-            else:
-                print("[i] No unvested RSUs found in Unvested sheet")
+                    print("[i] No unvested RSUs found in Unvested sheet")
 
             except Exception as e:
                 print(f"[i] Could not process unvested RSUs: {e}")
@@ -1170,7 +1152,7 @@ class ScheduleFAApp:
 
         print(f"[*] A2 Peak calculated from daily account values:")
         print(f"    Peak Date: {peak_date}")
-        print(f"    Account Value: ${total_peak_account_usd:.2f} × {peak_ttbr:.2f} = {total_peak_account_inr:.2f} INR")
+        print(f"    Account Value: ${total_peak_account_usd:.2f} x {peak_ttbr:.2f} = {total_peak_account_inr:.2f} INR")
 
         # Store the daily matrix with account values for the reference sheet
         self._daily_account_matrix = df_daily
@@ -1187,7 +1169,7 @@ class ScheduleFAApp:
             closing_ttbr = dec31_row['TTBR'].values[0] if not dec31_row.empty else 89.47
 
             total_closing_account_inr = round(client_statement_closing_usd * closing_ttbr, 2)
-            print(f"[OK] Using ClientStatement closing: ${client_statement_closing_usd:.2f} × {closing_ttbr:.2f} = {total_closing_account_inr:.2f} INR")
+            print(f"[OK] Using ClientStatement closing: ${client_statement_closing_usd:.2f} x {closing_ttbr:.2f} = {total_closing_account_inr:.2f} INR")
         else:
             # Fallback: sum of A3 closing balances
             total_closing_account_inr = sum(t["ClosingBalance"] for t in equity_tranches)
@@ -1896,13 +1878,13 @@ class ScheduleFAApp:
         print(f"\n[SUCCESS] Finished processing calendar year {self.calendar_year}!")
         print(f"    - JSON Output:  {json_filename}")
         print(f"    - Excel Output: {excel_filename} (7 sheets)")
-        print(f"        • Table A2 Custodial Acc")
-        print(f"        • Table A3 Equity Interest")
-        print(f"        • Excluded from A3 (Sales from previous years)")
-        print(f"        • Capital Gains (Current + Future sales)")
-        print(f"        • Reference - Daily Rates (AMD prices + SBI TTBR)")
-        print(f"        • A2 Peak Calculation (Daily account values)")
-        print(f"        • Pre-{self.calendar_year} Holdings Init Val")
+        print(f"        - Table A2 Custodial Acc")
+        print(f"        - Table A3 Equity Interest")
+        print(f"        - Excluded from A3 (Sales from previous years)")
+        print(f"        - Capital Gains (Current + Future sales)")
+        print(f"        - Reference - Daily Rates (AMD prices + SBI TTBR)")
+        print(f"        - A2 Peak Calculation (Daily account values)")
+        print(f"        - Pre-{self.calendar_year} Holdings Init Val")
         print(f"    - CSV A2:       {csv_a2_filename}")
         print(f"    - CSV A3:       {csv_a3_filename}")
         print(f"    - Total Equity Tranches: {len(equity_tranches)}")
@@ -2001,7 +1983,9 @@ if __name__ == "__main__":
         print("[*] Process complete! Check the generated files:")
         print(f"    - schedule_fa_{app.indian_fy}.json")
         print(f"    - schedule_fa_{app.indian_fy}.xlsx")
-        print("\n[*] You can now upload the JSON to the ITR e-filing portal.")
+        print(f"    - schedule_fa_{app.indian_fy}_table_a2.csv")
+        print(f"    - schedule_fa_{app.indian_fy}_table_a3.csv")
+        print("\n[*] You can now upload the CSV/JSON to the ITR e-filing portal.")
         print("[*] Review the Excel file to verify all values before filing.\n")
 
     except Exception as e:
