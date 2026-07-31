@@ -1019,6 +1019,88 @@ class ScheduleFAApp:
                 "TotGrossProceeds": 0  # 0 because not sold yet in this FY
             })
 
+        # 4. Process Unvested RSUs (Beneficial Interest)
+        # Per ITRFA.in: Unvested RSUs must be disclosed in Table A3 as beneficial interest
+        try:
+            print("\n[*] Checking for unvested RSUs...")
+            df_unvested = pd.read_excel(bystatus_file, sheet_name='Unvested')
+
+            # Filter for summary row with total unvested (last row usually has Symbol=AMD and totals)
+            # Or aggregate from individual rows
+            total_unvested = 0
+            earliest_grant_date = None
+
+            # Find rows with Symbol = AMD and Unvested Qty.
+            unvested_grants = df_unvested[
+                (df_unvested['Symbol'] == 'AMD') &
+                (df_unvested['Plan Type'].notna()) &
+                (df_unvested['Unvested Qty.'].notna()) &
+                (df_unvested['Unvested Qty.'] > 0)
+            ]
+
+            if not unvested_grants.empty:
+                total_unvested = int(unvested_grants['Unvested Qty.'].sum())
+
+                # Get earliest grant date
+                grant_dates = pd.to_datetime(unvested_grants['Grant Date'], errors='coerce').dropna()
+                if not grant_dates.empty:
+                    earliest_grant_date = grant_dates.min().strftime('%Y-%m-%d')
+                else:
+                    # Use Dec 31 of current year if no grant date found
+                    earliest_grant_date = self.end_date
+
+                print(f"[OK] Found {total_unvested} unvested RSU units")
+                print(f"    Earliest grant date: {earliest_grant_date}")
+
+                # Get AMD company details
+                comp_info = self.get_company_details("AMD")
+                df_matrix = comp_info["matrix"]
+
+                # Calculate peak value (unvested qty × peak price × peak TTBR)
+                if not df_matrix.empty:
+                    peak_idx = df_matrix['Valuation_Per_Share_INR'].idxmax()
+                    peak_price_inr = df_matrix.loc[peak_idx, 'Valuation_Per_Share_INR']
+                    peak_val = round(total_unvested * peak_price_inr, 2)
+                else:
+                    peak_val = 0
+
+                # Calculate closing value (unvested qty × Dec 31 price × Dec 31 TTBR)
+                close_row = df_matrix[df_matrix['Date'] == self.end_date]
+                if not close_row.empty:
+                    close_price_inr = close_row['Valuation_Per_Share_INR'].values[0]
+                    close_val = round(total_unvested * close_price_inr, 2)
+                else:
+                    # Use last available price
+                    close_price_inr = df_matrix['Valuation_Per_Share_INR'].iloc[-1]
+                    close_val = round(total_unvested * close_price_inr, 2)
+
+                # Add unvested RSUs as one aggregated A3 row
+                equity_tranches.append({
+                    "CountryName": "UNITED STATES OF AMERICA",
+                    "CountryCodeExcludingIndia": 2,
+                    "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
+                    "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
+                    "ZipCode": str(comp_info["zip"]),
+                    "NatureOfEntity": f"RSU Unvested Grants - Beneficial Interest ({total_unvested} units)",
+                    "InterestAcquiringDate": earliest_grant_date,
+                    "InitialValOfInvstmnt": 0,  # 0 because not acquired yet (only a promise)
+                    "PeakBalanceDuringPeriod": peak_val,
+                    "ClosingBalance": close_val,
+                    "_FMV_USD": 0,  # N/A for unvested
+                    "TotGrossAmtPaidCredited": 0,  # No dividends on unvested RSUs
+                    "TotGrossProceeds": 0
+                })
+
+                print(f"    Initial Value: Rs. 0 (not acquired yet)")
+                print(f"    Peak Value: Rs. {peak_val:,.2f}")
+                print(f"    Closing Value: Rs. {close_val:,.2f}")
+            else:
+                print("[i] No unvested RSUs found in Unvested sheet")
+
+        except Exception as e:
+            print(f"[i] Could not process unvested RSUs: {e}")
+            print("[i] Continuing without unvested RSU data")
+
         # Table A2 Custodial Account Aggregation
         # CORRECT METHOD: Calculate daily total account value and find maximum
         # (Not sum of individual peaks, since they occur on different dates)
