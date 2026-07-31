@@ -1577,10 +1577,10 @@ class ScheduleFAApp:
                         for row_idx in range(2, ws.max_row + 1):
                             cell = ws[f"{col_letter}{row_idx}"]
                             if cell.value and isinstance(cell.value, (int, float)):
-                                # A2 and A3 sheets: integers only (ITR portal requirement)
+                                # A2, A3, and Capital Gains sheets: integers only (ITR portal requirement)
                                 # Other sheets: show decimals for accuracy
-                                if sheet_name in ["Table A2 Custodial Acc", "Table A3 Equity Interest", "Excluded from A3"]:
-                                    cell.number_format = '₹#,##0'  # No decimals for A2/A3
+                                if sheet_name in ["Table A2 Custodial Acc", "Table A3 Equity Interest", "Excluded from A3", "Capital Gains"]:
+                                    cell.number_format = '₹#,##0'  # No decimals for ITR sheets
                                 else:
                                     cell.number_format = '₹#,##0.00'  # Show 2 decimal places for reference sheets
 
@@ -1652,7 +1652,7 @@ class ScheduleFAApp:
                             cell.font = total_font
                             cell.alignment = Alignment(horizontal='center', vertical='center')
                             if isinstance(cell.value, (int, float)):
-                                cell.number_format = '₹#,##0.00'  # Show 2 decimal places
+                                cell.number_format = '₹#,##0'  # No decimals for ITR format
 
                 # Freeze first row
                 ws.freeze_panes = ws['A2']
