@@ -66,10 +66,9 @@ jobs:
             DATE=$(date +'%Y-%m-%d')
 
             # Commit and push
-            git commit -m "Auto-update: SBI forex rates for ${DATE}
-
-Updated by GitHub Actions bot
-Auto-fetched from SBI official PDF (all 8 rates) + historical GitHub data"
+            git commit -m "Auto-update: SBI forex rates for ${DATE}" \
+                       -m "Updated by GitHub Actions bot" \
+                       -m "Auto-fetched from SBI official PDF (all 8 rates) + historical GitHub data"
 
             git push
 
