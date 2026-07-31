@@ -4,23 +4,20 @@ Automated generator for Schedule FA (Foreign Assets) for ITR2 filing in India.
 
 ---
 
-## 🚀 Quick Start (3 Steps)
+## 🚀 Quick Start (2 Steps)
 
-### Step 1: Edit Config
-1. Open `config.json` in Notepad
-2. Find: `"account_number": "ENTER_YOUR_ETRADE_ACCOUNT_NUMBER"`
-3. Replace with your actual E*TRADE account number
-4. Save file
-
-### Step 2: Add E*TRADE Files
+### Step 1: Add E*TRADE Files
 Place these files in `inputs/` folder:
 - `ByStatus_expanded.xlsx` (required)
 - `G&L_Expanded.xlsx` (optional - only if you sold stocks in this FY)
 
-### Step 3: Run
+### Step 2: Run
 Double-click: **`GENERATE_ITR_FA.bat`**
 
-Wait ~1-2 minutes. Check `outputs/` folder for generated files.
+**First run:** Auto-creates venv, installs packages, generates files (~3-5 minutes)  
+**Next runs:** Just generates files (~1-2 minutes)
+
+Check `outputs/` folder for generated files.
 
 ---
 
@@ -132,10 +129,11 @@ For sales in the current/future FY, the tool calculates advance tax payment sche
 
 ## BAT Files
 
-**`GENERATE_ITR_FA.bat`** - All-in-one runner (auto-setup + generation)
-- Auto-detects first run and installs dependencies
-- Validates config and input files
-- Runs the generator
+**`GENERATE_ITR_FA.bat`** - All-in-one runner (zero-config setup)
+- **First run:** Auto-creates venv + installs packages + generates output
+- **Next runs:** Just generates output
+- Auto-validates Python version (requires 3.14+)
+- Auto-creates config.json from example
 - **Just double-click this file!**  
 
 ---
@@ -160,7 +158,7 @@ Removes your personal data:
 - **Auto-updated daily** via GitHub Actions at 9:00 PM IST (see [AUTOMATION_SETUP.md](AUTOMATION_SETUP.md))
 
 **Requirements:**
-- Python 3.14+ with venv
+- Python 3.14+ (auto-creates venv on first run)
 - Chrome browser
 - Internet connection
 
