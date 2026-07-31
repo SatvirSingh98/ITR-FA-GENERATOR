@@ -634,20 +634,32 @@ class ScheduleFAApp:
         if df_stock.empty:
             raise ValueError(f"Could not fetch stock prices for {symbol}")
 
-        # Build valuation matrix - ONLY use actual trading days (no interpolation!)
-        # Merge stock prices with TTBR rates
+        # Build valuation matrix - use ALL US trading days
+        # Per Indian tax law (Rule 115): when SBI rate unavailable (weekend/holiday),
+        # use the last preceding trading day's rate
         df_matrix = pd.merge(
             df_stock[['Date', 'Stock_Close_USD']],
             self.df_sbi[['Date', 'TTBR']],
             on='Date',
-            how='inner'  # INNER join = only dates that have BOTH stock price AND TTBR
+            how='left'  # LEFT join = keep all US trading days, even if SBI rate missing
         )
 
-        # Calculate INR valuation per share (only for actual trading days)
-        df_matrix['Valuation_Per_Share_INR'] = df_matrix['Stock_Close_USD'] * df_matrix['TTBR']
-
-        # Sort by date
+        # Sort by date first (required for forward-fill)
         df_matrix = df_matrix.sort_values('Date').reset_index(drop=True)
+
+        # Forward-fill missing TTBR with previous day's rate
+        # This implements Rule 115: "use rate from last preceding working day"
+        df_matrix['TTBR'] = df_matrix['TTBR'].ffill()
+
+        # Drop any rows still missing TTBR (start of dataset, before any SBI data available)
+        rows_before = len(df_matrix)
+        df_matrix = df_matrix.dropna(subset=['TTBR'])
+        rows_after = len(df_matrix)
+        if rows_before > rows_after:
+            print(f"[i] Dropped {rows_before - rows_after} dates before first available SBI rate")
+
+        # Calculate INR valuation per share (for all US trading days)
+        df_matrix['Valuation_Per_Share_INR'] = df_matrix['Stock_Close_USD'] * df_matrix['TTBR']
 
         data = {
             "name": company_name,
