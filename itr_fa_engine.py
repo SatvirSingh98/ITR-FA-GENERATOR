@@ -1571,13 +1571,18 @@ class ScheduleFAApp:
                             if cell.value and isinstance(cell.value, (int, float)):
                                 cell.number_format = '$#,##0.00'  # Show 2 decimal places
 
-                    # INR Currency columns - show exact decimal values (CHECK LAST, after USD excluded)
+                    # INR Currency columns - different format for A2/A3 vs other sheets
                     elif header_value and any(keyword in str(header_value) for keyword in
                                            ['INR', 'Value', 'Balance', 'Amount', 'Proceeds', 'Cost', 'Gain', 'Tax', 'Invstmnt']):
                         for row_idx in range(2, ws.max_row + 1):
                             cell = ws[f"{col_letter}{row_idx}"]
                             if cell.value and isinstance(cell.value, (int, float)):
-                                cell.number_format = '₹#,##0.00'  # Show 2 decimal places
+                                # A2 and A3 sheets: integers only (ITR portal requirement)
+                                # Other sheets: show decimals for accuracy
+                                if sheet_name in ["Table A2 Custodial Acc", "Table A3 Equity Interest", "Excluded from A3"]:
+                                    cell.number_format = '₹#,##0'  # No decimals for A2/A3
+                                else:
+                                    cell.number_format = '₹#,##0.00'  # Show 2 decimal places for reference sheets
 
                     # Date columns
                     elif header_value and 'Date' in str(header_value):
