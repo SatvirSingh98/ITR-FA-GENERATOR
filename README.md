@@ -152,8 +152,9 @@ Removes your personal data:
 
 **Data Sources:**
 - Stock prices: Yahoo Finance (web scraping)
-- Exchange rates: SBI TTBR from GitHub
+- Exchange rates: SBI TTBR (independent fetcher - SBI PDF + GitHub fallback)
 - Company info: Yahoo Finance profiles
+- **Auto-updated daily** via GitHub Actions at 9:00 PM IST (see [AUTOMATION_SETUP.md](AUTOMATION_SETUP.md))
 
 **Requirements:**
 - Python 3.14+ with venv

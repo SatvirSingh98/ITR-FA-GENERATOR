@@ -97,76 +97,87 @@ class ScheduleFAApp:
         self._extra_ttbr_dates_loaded = False  # Track if we've loaded pre-FY dates
 
     def _fetch_sbi_rates_web(self, extra_dates=None):
-        """Downloads and filters SBI TTBR rates from GitHub.
+        """Downloads and filters SBI TTBR rates using our own fetcher (SBI PDF first, GitHub fallback).
 
         Args:
             extra_dates: List of specific dates before FY to include (e.g., ['2024-11-08', '2024-09-15'])
         """
-        print("[*] Downloading SBI TTBR rates from GitHub...")
-
-        url = "https://raw.githubusercontent.com/sahilgupta/sbi-fx-ratekeeper/main/csv_files/SBI_REFERENCE_RATES_USD.csv"
-
+        # Use our own SBI TTBR fetcher instead of direct GitHub download
+        df = None
         try:
-            # Download the CSV file
-            response = requests.get(url, timeout=30, verify=False)
-            response.raise_for_status()
+            from sbi_ttbr_fetcher import fetch_sbi_ttbr_rates
 
-            # Parse CSV
-            from io import StringIO
-            df = pd.read_csv(StringIO(response.text))
-
-            print(f"[*] CSV columns found: {list(df.columns)[:5]}")
-
-            # GitHub CSV uses: DATE, TT BUY (not Date, TTBR)
-            # Normalize column names
-            if 'DATE' in df.columns:
-                df = df.rename(columns={'DATE': 'Date', 'TT BUY': 'TTBR'})
-            elif 'Date' not in df.columns or 'TTBR' not in df.columns:
-                raise ValueError(f"CSV must have 'DATE'/'Date' and 'TT BUY'/'TTBR' columns. Found: {list(df.columns)}")
-
-            # Convert and clean data
-            df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
-            df['TTBR'] = pd.to_numeric(df['TTBR'], errors='coerce')
-            df = df.sort_values('Date').dropna(subset=['TTBR'])
-
-            # Filter for target year only (for peak/closing calculations)
-            df_year = df[(df['Date'] >= self.start_date) & (df['Date'] <= self.end_date)]
-
-            # Add specific pre-FY dates for initial value calculations (if provided)
-            if extra_dates:
-                df_extra = df[df['Date'].isin(extra_dates)]
-                df_combined = pd.concat([df_year, df_extra]).drop_duplicates(subset=['Date']).sort_values('Date')
-
-                if len(df_extra) > 0:
-                    print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
-                    print(f"[OK] Plus {len(df_extra)} specific dates before FY: {', '.join(sorted(extra_dates))}")
-                else:
-                    print(f"[!] WARNING: Could not find TTBR for pre-FY dates: {', '.join(sorted(extra_dates))}")
-                    print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
-
-                print(f"[OK] TTBR range: {df_combined['TTBR'].min():.2f} to {df_combined['TTBR'].max():.2f}")
-                return df_combined[['Date', 'TTBR']]
-            else:
-                if df_year.empty:
-                    print(f"[!] WARNING: No SBI TTBR data for {self.calendar_year}")
-                    print(f"[!] Available date range: {df['Date'].min()} to {df['Date'].max()}")
-                    print("[!] Using fallback interpolated rates")
-                    raise ValueError(f"No data for year {self.calendar_year}")
-
-                print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
-                print(f"[OK] TTBR range: {df_year['TTBR'].min():.2f} to {df_year['TTBR'].max():.2f}")
-                return df_year[['Date', 'TTBR']]
-
+            print("[*] Using SBI TTBR fetcher (tries SBI PDF first, then GitHub fallback)")
+            df = fetch_sbi_ttbr_rates()
         except Exception as e:
-            print(f"[!] ERROR downloading SBI rates: {str(e)}")
-            print("[!] Using fallback interpolated rates")
+            print(f"[!] SBI TTBR fetcher failed: {e}")
+            print(f"[!] Falling back to legacy GitHub download")
 
-            # Fallback - use realistic 2024-2026 range
-            all_dates = pd.date_range(start=self.start_date, end=self.end_date).strftime('%Y-%m-%d')
-            return pd.DataFrame({
-                'Date': all_dates,
-                'TTBR': [83.00 + (85.00 - 83.00) * i / len(all_dates) for i in range(len(all_dates))]
-            })
+        # If our fetcher failed, try legacy GitHub download
+        if df is None:
+            print("[*] Downloading SBI TTBR rates from GitHub (legacy method)...")
+
+            url = "https://raw.githubusercontent.com/sahilgupta/sbi-fx-ratekeeper/main/csv_files/SBI_REFERENCE_RATES_USD.csv"
+
+            try:
+                # Download the CSV file
+                response = requests.get(url, timeout=30, verify=False)
+                response.raise_for_status()
+
+                # Parse CSV
+                from io import StringIO
+                df = pd.read_csv(StringIO(response.text))
+
+                print(f"[*] CSV columns found: {list(df.columns)[:5]}")
+
+                # GitHub CSV uses: DATE, TT BUY (not Date, TTBR)
+                # Normalize column names
+                if 'DATE' in df.columns:
+                    df = df.rename(columns={'DATE': 'Date', 'TT BUY': 'TTBR'})
+                elif 'Date' not in df.columns or 'TTBR' not in df.columns:
+                    raise ValueError(f"CSV must have 'DATE'/'Date' and 'TT BUY'/'TTBR' columns. Found: {list(df.columns)}")
+
+                # Convert and clean data
+                df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+                df['TTBR'] = pd.to_numeric(df['TTBR'], errors='coerce')
+                df = df.sort_values('Date').dropna(subset=['TTBR'])
+            except Exception as e:
+                print(f"[ERROR] Failed to download from GitHub: {e}")
+                raise
+
+        # At this point, df should have columns: Date, TTBR (from either our fetcher or GitHub legacy)
+        # Ensure data is clean
+        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+        df['TTBR'] = pd.to_numeric(df['TTBR'], errors='coerce')
+        df = df.sort_values('Date').dropna(subset=['TTBR'])
+
+        # Filter for target year only (for peak/closing calculations)
+        df_year = df[(df['Date'] >= self.start_date) & (df['Date'] <= self.end_date)]
+
+        # Add specific pre-FY dates for initial value calculations (if provided)
+        if extra_dates:
+            df_extra = df[df['Date'].isin(extra_dates)]
+            df_combined = pd.concat([df_year, df_extra]).drop_duplicates(subset=['Date']).sort_values('Date')
+
+            if len(df_extra) > 0:
+                print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
+                print(f"[OK] Plus {len(df_extra)} specific dates before FY: {', '.join(sorted(extra_dates))}")
+            else:
+                print(f"[!] WARNING: Could not find TTBR for pre-FY dates: {', '.join(sorted(extra_dates))}")
+                print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
+
+            print(f"[OK] TTBR range: {df_combined['TTBR'].min():.2f} to {df_combined['TTBR'].max():.2f}")
+            return df_combined[['Date', 'TTBR']]
+        else:
+            if df_year.empty:
+                print(f"[!] WARNING: No SBI TTBR data for {self.calendar_year}")
+                print(f"[!] Available date range: {df['Date'].min()} to {df['Date'].max()}")
+                print("[!] Using fallback interpolated rates")
+                raise ValueError(f"No data for year {self.calendar_year}")
+
+            print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
+            print(f"[OK] TTBR range: {df_year['TTBR'].min():.2f} to {df_year['TTBR'].max():.2f}")
+            return df_year[['Date', 'TTBR']]
 
     def _detect_country(self, address):
         """Detect country from address and return ITR-compliant country name and code."""

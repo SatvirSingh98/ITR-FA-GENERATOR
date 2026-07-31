@@ -37,3 +37,10 @@ desktop.ini
 ~$*.xlsx
 ~$*.xls
 .claude
+
+# Test files (exclude)
+sbi_ttbr_test.csv
+
+# But INCLUDE the data directory for GitHub Actions
+!data/
+!data/*.csv

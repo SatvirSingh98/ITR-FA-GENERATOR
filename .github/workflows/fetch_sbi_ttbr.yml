@@ -1,0 +1,85 @@
+name: Fetch SBI TTBR Rates Daily
+
+on:
+  # Run daily at 9:00 PM IST (3:30 PM UTC = 9:00 PM IST)
+  schedule:
+    - cron: '30 15 * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  fetch-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests PyPDF2 python-dateutil
+
+      - name: Run SBI TTBR Fetcher
+        run: |
+          python sbi_ttbr_fetcher.py
+
+          # Check if CSV was created/updated
+          if [ -f "sbi_ttbr_test.csv" ]; then
+            echo "SBI TTBR data fetched successfully"
+
+            # Create data directory if it doesn't exist
+            mkdir -p data
+
+            # Move to proper location
+            mv sbi_ttbr_test.csv data/sbi_ttbr_rates.csv
+
+            # Show last 5 entries
+            echo "Latest rates:"
+            tail -5 data/sbi_ttbr_rates.csv
+          else
+            echo "Failed to fetch SBI TTBR data"
+            exit 1
+          fi
+
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+
+          # Add the CSV file
+          git add data/sbi_ttbr_rates.csv
+
+          # Check if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            # Get today's date for commit message
+            DATE=$(date +'%Y-%m-%d')
+
+            # Commit and push
+            git commit -m "Auto-update: SBI TTBR rates for ${DATE}
+
+Updated by GitHub Actions bot
+Auto-fetched from SBI official PDF + historical GitHub data"
+
+            git push
+
+            echo "Successfully committed and pushed updated rates"
+          fi
+
+      - name: Upload artifact (for manual inspection)
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: sbi-ttbr-data
+          path: data/sbi_ttbr_rates.csv
+          retention-days: 7
