@@ -39,7 +39,7 @@ desktop.ini
 .claude
 
 # Test files (exclude)
-sbi_ttbr_test.csv
+SBI_FOREX_CARD_RATES_USD.csv
 
 # But INCLUDE the data directory for GitHub Actions
 !data/

@@ -28,25 +28,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas requests PyPDF2 python-dateutil
 
-      - name: Run SBI TTBR Fetcher
+      - name: Run SBI Forex Fetcher
         run: |
-          python sbi_ttbr_fetcher.py
+          python sbi_forex_fetcher.py
 
           # Check if CSV was created/updated
-          if [ -f "sbi_ttbr_test.csv" ]; then
-            echo "SBI TTBR data fetched successfully"
+          if [ -f "SBI_FOREX_CARD_RATES_USD.csv" ]; then
+            echo "SBI forex data fetched successfully"
 
             # Create data directory if it doesn't exist
             mkdir -p data
 
             # Move to proper location
-            mv sbi_ttbr_test.csv data/sbi_ttbr_rates.csv
+            mv SBI_FOREX_CARD_RATES_USD.csv data/SBI_FOREX_CARD_RATES_USD.csv
 
             # Show last 5 entries
             echo "Latest rates:"
-            tail -5 data/sbi_ttbr_rates.csv
+            tail -5 data/SBI_FOREX_CARD_RATES_USD.csv
           else
-            echo "Failed to fetch SBI TTBR data"
+            echo "Failed to fetch SBI forex data"
             exit 1
           fi
 
@@ -56,7 +56,7 @@ jobs:
           git config --local user.name "GitHub Actions Bot"
 
           # Add the CSV file
-          git add data/sbi_ttbr_rates.csv
+          git add data/SBI_FOREX_CARD_RATES_USD.csv
 
           # Check if there are changes
           if git diff --staged --quiet; then
@@ -66,10 +66,10 @@ jobs:
             DATE=$(date +'%Y-%m-%d')
 
             # Commit and push
-            git commit -m "Auto-update: SBI TTBR rates for ${DATE}
+            git commit -m "Auto-update: SBI forex rates for ${DATE}
 
 Updated by GitHub Actions bot
-Auto-fetched from SBI official PDF + historical GitHub data"
+Auto-fetched from SBI official PDF (all 8 rates) + historical GitHub data"
 
             git push
 
@@ -80,6 +80,6 @@ Auto-fetched from SBI official PDF + historical GitHub data"
         uses: actions/upload-artifact@v3
         if: always()
         with:
-          name: sbi-ttbr-data
-          path: data/sbi_ttbr_rates.csv
+          name: sbi-forex-data
+          path: data/SBI_FOREX_CARD_RATES_USD.csv
           retention-days: 7

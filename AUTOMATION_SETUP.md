@@ -105,7 +105,7 @@ After automation runs:
 
 1. **GitHub Actions page**: See green checkmarks for successful runs
 2. **Latest commit**: Should show daily commits from "GitHub Actions Bot"
-3. **Data file**: Check `data/sbi_ttbr_rates.csv` has recent dates
+3. **Data file**: Check `data/SBI_FOREX_CARD_RATES_USD.csv` has recent dates
 
 ### If it fails
 
@@ -116,6 +116,7 @@ After automation runs:
    - SBI website down: Falls back to GitHub CSV
    - GitHub CSV unavailable: Workflow will fail (needs manual intervention)
    - Network timeout: Will retry next day
+   - SBI PDF has stale date: Skips SBI data, uses only GitHub (no commit since no new data)
 
 ## Testing Locally
 
@@ -127,19 +128,19 @@ venv\Scripts\activate  # Windows
 source venv/bin/activate  # Linux/Mac
 
 # Run the fetcher
-python sbi_ttbr_fetcher.py
+python sbi_forex_fetcher.py
 
 # Check output
-type sbi_ttbr_test.csv  # Windows
-cat sbi_ttbr_test.csv   # Linux/Mac
+type SBI_FOREX_CARD_RATES_USD.csv  # Windows
+cat SBI_FOREX_CARD_RATES_USD.csv   # Linux/Mac
 ```
 
 ## Integration with ITR FA Generator
 
 The main script (`itr_fa_engine.py`) automatically uses the CSV if available:
 
-1. **First choice**: Read `data/sbi_ttbr_rates.csv` (if exists and has data for target year)
-2. **Second choice**: Fetch on-demand using `sbi_ttbr_fetcher.py`
+1. **First choice**: Read `data/SBI_FOREX_CARD_RATES_USD.csv` (if exists and has data for target year)
+2. **Second choice**: Fetch on-demand using `sbi_forex_fetcher.py`
 3. **Third choice**: Use fallback interpolated rates (if all else fails)
 
 This means once you push to GitHub and the automation runs, your local ITR FA Generator will automatically use the pre-fetched data! 🚀

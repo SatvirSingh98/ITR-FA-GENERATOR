@@ -97,23 +97,52 @@ class ScheduleFAApp:
         self._extra_ttbr_dates_loaded = False  # Track if we've loaded pre-FY dates
 
     def _fetch_sbi_rates_web(self, extra_dates=None):
-        """Downloads and filters SBI TTBR rates using our own fetcher (SBI PDF first, GitHub fallback).
+        """Downloads and filters SBI forex rates using our own fetcher (SBI PDF first, GitHub fallback).
 
         Args:
             extra_dates: List of specific dates before FY to include (e.g., ['2024-11-08', '2024-09-15'])
         """
-        # Use our own SBI TTBR fetcher instead of direct GitHub download
+        # Use our own SBI forex fetcher instead of direct GitHub download
         df = None
         try:
-            from sbi_ttbr_fetcher import fetch_sbi_ttbr_rates
+            from sbi_forex_fetcher import fetch_sbi_forex_rates
 
-            print("[*] Using SBI TTBR fetcher (tries SBI PDF first, then GitHub fallback)")
-            df = fetch_sbi_ttbr_rates()
+            print("[*] Using SBI forex fetcher (tries SBI PDF first, then GitHub fallback)")
+            df = fetch_sbi_forex_rates()
+
+            # Convert DATE column to Date and extract TT BUY as TTBR
+            if 'DATE' in df.columns and 'TT BUY' in df.columns:
+                df['Date'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+                df['TTBR'] = pd.to_numeric(df['TT BUY'], errors='coerce')
+                # Keep only Date and TTBR for compatibility
+                df = df[['Date', 'TTBR']].copy()
+            else:
+                raise ValueError(f"Fetcher returned unexpected format. Columns: {list(df.columns)}")
+
         except Exception as e:
-            print(f"[!] SBI TTBR fetcher failed: {e}")
-            print(f"[!] Falling back to legacy GitHub download")
+            print(f"[!] SBI forex fetcher failed: {e}")
+            print(f"[!] Falling back to local CSV or legacy GitHub download")
 
-        # If our fetcher failed, try legacy GitHub download
+        # If our fetcher failed, try reading local CSV first
+        if df is None:
+            local_csv = os.path.join('data', 'SBI_FOREX_CARD_RATES_USD.csv')
+            if os.path.exists(local_csv):
+                try:
+                    print(f"[*] Reading local SBI forex data from {local_csv}...")
+                    df = pd.read_csv(local_csv)
+
+                    if 'DATE' in df.columns and 'TT BUY' in df.columns:
+                        df['Date'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+                        df['TTBR'] = pd.to_numeric(df['TT BUY'], errors='coerce')
+                        df = df[['Date', 'TTBR']].copy()
+                        print(f"[OK] Loaded {len(df)} records from local CSV")
+                    else:
+                        raise ValueError(f"Local CSV has unexpected format. Columns: {list(df.columns)}")
+                except Exception as e:
+                    print(f"[!] Failed to read local CSV: {e}")
+                    df = None
+
+        # If still no data, try legacy GitHub download
         if df is None:
             print("[*] Downloading SBI TTBR rates from GitHub (legacy method)...")
 
@@ -133,21 +162,20 @@ class ScheduleFAApp:
                 # GitHub CSV uses: DATE, TT BUY (not Date, TTBR)
                 # Normalize column names
                 if 'DATE' in df.columns:
-                    df = df.rename(columns={'DATE': 'Date', 'TT BUY': 'TTBR'})
+                    df['Date'] = pd.to_datetime(df['DATE']).dt.strftime('%Y-%m-%d')
+                    df['TTBR'] = pd.to_numeric(df['TT BUY'], errors='coerce')
+                    df = df[['Date', 'TTBR']].copy()
                 elif 'Date' not in df.columns or 'TTBR' not in df.columns:
                     raise ValueError(f"CSV must have 'DATE'/'Date' and 'TT BUY'/'TTBR' columns. Found: {list(df.columns)}")
 
-                # Convert and clean data
-                df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
-                df['TTBR'] = pd.to_numeric(df['TTBR'], errors='coerce')
                 df = df.sort_values('Date').dropna(subset=['TTBR'])
             except Exception as e:
                 print(f"[ERROR] Failed to download from GitHub: {e}")
                 raise
 
-        # At this point, df should have columns: Date, TTBR (from either our fetcher or GitHub legacy)
+        # At this point, df should have columns: Date, TTBR (from either our fetcher, local CSV, or GitHub legacy)
         # Ensure data is clean
-        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.strftime('%Y-%m-%d')
         df['TTBR'] = pd.to_numeric(df['TTBR'], errors='coerce')
         df = df.sort_values('Date').dropna(subset=['TTBR'])
 

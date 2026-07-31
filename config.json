@@ -9,5 +9,14 @@
     "account_number": "",
     "status": "BENEFICIAL_OWNER",
     "account_opening_date": ""
+  },
+  "table_a3_companies": {
+    "AMD": {
+      "company_name": "Advanced Micro Devices, Inc.",
+      "company_address": "2485 Augustine Drive Santa Clara, CA",
+      "zip_code": "95054",
+      "country_name": "UNITED STATES OF AMERICA",
+      "country_code": "2"
+    }
   }
 }
