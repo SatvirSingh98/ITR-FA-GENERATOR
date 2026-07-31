@@ -103,10 +103,10 @@ if not exist venv\Scripts\python.exe (
     )
 )
 
-REM Check if packages are installed
-venv\Scripts\python.exe -c "import pandas, selenium, openpyxl" >nul 2>&1
+REM Check if all required packages are installed
+venv\Scripts\python.exe -c "import pandas, selenium, openpyxl, PyPDF2, yfinance, requests" >nul 2>&1
 if errorlevel 1 (
-    echo   [i] First-time setup detected - installing packages...
+    echo   [i] Installing/updating packages...
     echo   [i] This may take 2-5 minutes, please wait...
     echo.
 
