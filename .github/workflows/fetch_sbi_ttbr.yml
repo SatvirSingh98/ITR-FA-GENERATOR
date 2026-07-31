@@ -76,7 +76,7 @@ jobs:
           fi
 
       - name: Upload artifact (for manual inspection)
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sbi-forex-data
