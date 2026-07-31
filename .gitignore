@@ -8,6 +8,9 @@ outputs/*.xlsx
 outputs/*.csv
 output_summary.txt
 
+#exclude your config.json
+config.json
+
 # Python
 __pycache__/
 *.py[cod]
