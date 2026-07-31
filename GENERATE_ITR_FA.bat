@@ -103,29 +103,17 @@ if not exist venv\Scripts\python.exe (
     )
 )
 
-REM Check if all required packages are installed
-venv\Scripts\python.exe -c "import pandas, selenium, openpyxl, PyPDF2, yfinance, requests" >nul 2>&1
+REM Always ensure packages from requirements.txt are installed/updated
+REM Use pip install with --quiet to skip if already satisfied
+echo   [i] Checking packages from requirements.txt...
+venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
+
 if errorlevel 1 (
-    echo   [i] Installing/updating packages...
-    echo   [i] This may take 2-5 minutes, please wait...
+    echo   [ERROR] Package installation failed!
+    echo   [i] Check your internet connection and try again.
     echo.
-
-    REM Upgrade pip
-    venv\Scripts\python.exe -m pip install --upgrade pip --quiet
-
-    REM Install packages
-    venv\Scripts\python.exe -m pip install -r requirements.txt
-
-    if errorlevel 1 (
-        echo   [ERROR] Package installation failed!
-        echo   [i] Check your internet connection and try again.
-        echo.
-        pause
-        exit /b 1
-    )
-
-    echo   [OK] Packages installed successfully
-    echo.
+    pause
+    exit /b 1
 )
 echo   [OK] Python environment ready
 echo.
