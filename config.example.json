@@ -6,6 +6,9 @@
 
   "target_year": 2025,
 
+  "disclose_unvested_rsu": false,
+  "_UNVESTED_RSU_NOTE": "Set to true for conservative approach (disclose unvested RSUs as beneficial interest). Most CAs recommend false (defer until vesting). See: https://itrfa.in/blog/rsu-schedule-fa-india",
+
   "custodial_account": {
     "country_name": "UNITED STATES OF AMERICA",
     "country_code": "2",

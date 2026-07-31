@@ -68,6 +68,8 @@ Edit `config.json`:
 {
   "target_year": 2025,
   
+  "disclose_unvested_rsu": false,
+  
   "custodial_account": {
     "country_name": "UNITED STATES OF AMERICA",
     "country_code": "2",
@@ -83,7 +85,9 @@ Edit `config.json`:
 }
 ```
 
-**Note:** Leave `table_a3_companies` empty - auto-filled by script!
+**Configuration Notes:**
+- **`disclose_unvested_rsu`**: Set to `true` for conservative approach (disclose unvested RSUs as beneficial interest). Default: `false` (practical approach - defer until vesting). Per ITRFA.in: "some CAs defer until vesting". Consult your CA if unsure.
+- **`table_a3_companies`**: Leave empty - auto-filled by script!
 
 ---
 

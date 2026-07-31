@@ -1019,11 +1019,14 @@ class ScheduleFAApp:
                 "TotGrossProceeds": 0  # 0 because not sold yet in this FY
             })
 
-        # 4. Process Unvested RSUs (Beneficial Interest)
-        # Per ITRFA.in: Unvested RSUs must be disclosed in Table A3 as beneficial interest
-        try:
-            print("\n[*] Checking for unvested RSUs...")
-            df_unvested = pd.read_excel(bystatus_file, sheet_name='Unvested')
+        # 4. Process Unvested RSUs (Beneficial Interest) - OPTIONAL
+        # Per ITRFA.in: "conservative practice; some CAs defer until vesting"
+        # Controlled by config.json: "disclose_unvested_rsu" (default: false)
+        config = load_config()
+        if config.get('disclose_unvested_rsu', False):
+            try:
+                print("\n[*] Checking for unvested RSUs (conservative disclosure enabled)...")
+                df_unvested = pd.read_excel(bystatus_file, sheet_name='Unvested')
 
             # Filter for summary row with total unvested (last row usually has Symbol=AMD and totals)
             # Or aggregate from individual rows
@@ -1097,9 +1100,13 @@ class ScheduleFAApp:
             else:
                 print("[i] No unvested RSUs found in Unvested sheet")
 
-        except Exception as e:
-            print(f"[i] Could not process unvested RSUs: {e}")
-            print("[i] Continuing without unvested RSU data")
+            except Exception as e:
+                print(f"[i] Could not process unvested RSUs: {e}")
+                print("[i] Continuing without unvested RSU data")
+        else:
+            print("[i] Unvested RSU disclosure disabled (config: disclose_unvested_rsu = false)")
+            print("[i] Per ITRFA.in: 'some CAs defer until vesting' - this is the practical approach")
+            print("[i] To enable conservative disclosure, set 'disclose_unvested_rsu': true in config.json")
 
         # Table A2 Custodial Account Aggregation
         # CORRECT METHOD: Calculate daily total account value and find maximum
