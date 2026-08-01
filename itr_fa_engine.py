@@ -1096,13 +1096,14 @@ class ScheduleFAApp:
 
                     # Add unvested RSUs as one aggregated A3 row
                     # ITR portal limit: 34 characters for NatureOfEntity
+                    # "Beneficial Interest" = legal term for future right to receive shares (not yet acquired)
                     equity_tranches.append({
                         "CountryName": "UNITED STATES OF AMERICA",
                         "CountryCodeExcludingIndia": 2,
                         "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
                         "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
                         "ZipCode": str(comp_info["zip"]),
-                        "NatureOfEntity": f"RSU Unvested ({total_unvested} units)",
+                        "NatureOfEntity": f"Beneficial Interest ({total_unvested} units)",
                         "InterestAcquiringDate": earliest_grant_date,
                         "InitialValOfInvstmnt": 0,  # 0 because not acquired yet (only a promise)
                         "PeakBalanceDuringPeriod": peak_val,
