@@ -78,8 +78,15 @@ class ScheduleFAApp:
         current_year = datetime.now().year
         self.calendar_year = calendar_year if calendar_year else (current_year - 1)
 
+        # Schedule FA uses CALENDAR YEAR (Jan 1 - Dec 31)
         self.start_date = f"{self.calendar_year}-01-01"
         self.end_date = f"{self.calendar_year}-12-31"
+
+        # Capital Gains (Schedule CG) uses extended range (Jan 1 - Mar 31 next year)
+        # Per ITRFA.in: "If also filing Schedule CG, OS/FSI, or Form 67, set to Jan 1 2025 - Mar 31 2026 (15 months)"
+        # This captures sales from Jan-Mar of next calendar year that fall in same FY
+        self.cg_start_date = f"{self.calendar_year}-01-01"
+        self.cg_end_date = f"{self.calendar_year + 1}-03-31"
 
         # Dynamic Tax Schema Years
         self.indian_fy = f"{self.calendar_year}-{str(self.calendar_year + 1)[-2:]}"
@@ -89,6 +96,8 @@ class ScheduleFAApp:
         print(f"  Schedule FA - Web Scraping Mode")
         print(f"  Target Year: {self.calendar_year}")
         print(f"  Applicable FY: {self.indian_fy} | AY: {self.assessment_year}")
+        print(f"  Schedule FA: {self.start_date} to {self.end_date}")
+        print(f"  Capital Gains: {self.cg_start_date} to {self.cg_end_date}")
         print(f"=======================================================\n")
 
         # Datasets & Caches
@@ -816,33 +825,34 @@ class ScheduleFAApp:
                 df_sold_all['Date Sold'] = pd.to_datetime(df_sold_all['Date Sold'])
 
                 # Split into two categories:
-                # Category 1: Actually sold in THIS FY (start_date <= sold <= end_date)
-                # IMPORTANT: Only include sales from THIS FY onwards (exclude old sales from previous years)
+                # Category 1: Actually sold in THIS FY (cg_start_date <= sold <= cg_end_date)
+                # IMPORTANT: Use extended CG date range (Jan 1 - Mar 31 next year) per ITRFA.in
+                # This captures sales from Jan-Mar next calendar year that fall in same Indian FY
                 df_sold_in_fy = df_sold_all[
-                    (df_sold_all['Date Acquired'] <= self.end_date) &
-                    (df_sold_all['Date Sold'] >= self.start_date) &
-                    (df_sold_all['Date Sold'] <= self.end_date)
+                    (df_sold_all['Date Acquired'] <= self.cg_end_date) &
+                    (df_sold_all['Date Sold'] >= self.cg_start_date) &
+                    (df_sold_all['Date Sold'] <= self.cg_end_date)
                 ].copy()
 
                 # Category 2: Held in THIS FY but sold AFTER FY ends
                 # These are for advance tax planning (sold in future years)
                 # IMPORTANT: Only include future sales, not old sales from before this FY
                 df_sold_future = df_sold_all[
-                    (df_sold_all['Date Acquired'] <= self.end_date) &
-                    (df_sold_all['Date Sold'] > self.end_date)
+                    (df_sold_all['Date Acquired'] <= self.cg_end_date) &
+                    (df_sold_all['Date Sold'] > self.cg_end_date)
                 ].copy()
 
                 # Exclude any sales that happened BEFORE this FY started (old/historical sales)
                 # Example: For FY 2025, exclude sales from 2024, 2023, etc.
-                df_sold_in_fy = df_sold_in_fy[df_sold_in_fy['Date Sold'] >= self.start_date]
+                df_sold_in_fy = df_sold_in_fy[df_sold_in_fy['Date Sold'] >= self.cg_start_date]
 
                 # For now, we'll process Category 1 (actually sold in FY)
                 df_sold = df_sold_in_fy
 
-                # Category 3: Sales BEFORE this FY (excluded from A3 for tracking)
-                # These are shares that were sold in previous years and should NOT appear in A3
+                # Category 3: Sales BEFORE this CG period (excluded from A3 for tracking)
+                # These are shares that were sold before the CG period and should NOT appear in A3
                 df_sold_before_fy = df_sold_all[
-                    (df_sold_all['Date Sold'] < pd.to_datetime(self.start_date))
+                    (df_sold_all['Date Sold'] < pd.to_datetime(self.cg_start_date))
                 ].copy()
 
                 print(f"[OK] Found {len(df_sold_in_fy)} sales WITHIN FY {self.indian_fy}")
@@ -1419,9 +1429,9 @@ class ScheduleFAApp:
             if tranche.get('_SaleDate') and tranche.get('_GrossProceeds'):
                 sale_date = pd.to_datetime(tranche.get('_SaleDate', ''))
 
-                # FILTER: Only include sales from start of THIS FY onwards
-                # Example: For FY 2025, only include sales from 2025-01-01 onwards
-                if sale_date < pd.to_datetime(self.start_date):
+                # FILTER: Only include sales within the CG period (Jan 1 - Mar 31 next year)
+                # Example: For AY 2026-27, include sales from 2025-01-01 to 2026-03-31
+                if sale_date < pd.to_datetime(self.cg_start_date):
                     continue  # Skip old sales from previous years
 
                 # Extract quantity from NatureOfEntity (e.g., "RSU (26 shares) Sold" -> 26)
