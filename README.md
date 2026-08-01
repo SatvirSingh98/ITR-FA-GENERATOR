@@ -221,3 +221,26 @@ Removes your personal data:
 
 **E*TRADE Only** | **One Account Per Run** | **Auto-Discovery Enabled**  
 **Version:** July 2026
+
+---
+
+## Credits & Acknowledgments
+
+This tool was built with guidance and inspiration from:
+
+**[ITRFA.in](https://itrfa.in/)** - Comprehensive ITR Schedule FA & CG guidance
+- [Schedule CG for RSU & ESPP Sales](https://itrfa.in/blog/schedule-cg-rsu-espp) - Income-tax Rule 115(1)(f), Section 49(2AA), STCG/LTCG classification
+- [SBI TTBR Rule 115](https://itrfa.in/blog/sbi-ttbr-rule-115) - Exchange rate rules for Schedule FA vs Schedule CG
+- Their blog posts provided critical insights into correct tax computation per Indian Tax Law
+
+**[sbi-fx-ratekeeper](https://github.com/sahilgupta/sbi-fx-ratekeeper)** by [@sahilgupta](https://github.com/sahilgupta)
+- Community-maintained archive of SBI daily TTBR rates (2020-present)
+- Used as fallback data source when SBI official PDF is unavailable
+- Essential for historical rate lookups needed for Schedule FA Table A3 initial values
+
+**Community Resources:**
+- [Income Tax Department](https://incometaxindia.gov.in/) - Official ITR filing instructions
+- [SBI Forex Rates](https://sbi.co.in/web/interest-rates/interest-rates/forex-rates) - Daily TTBR (Telegraphic Transfer Buying Rate)
+- [Yahoo Finance](https://finance.yahoo.com/) - Stock price data and company profiles
+
+Thank you to all contributors and maintainers of these invaluable resources!
