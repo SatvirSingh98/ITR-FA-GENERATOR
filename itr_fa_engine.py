@@ -2403,9 +2403,9 @@ class ScheduleFAApp:
                                 # A2, A3, and Capital Gains sheets: integers only (ITR portal requirement)
                                 # Other sheets: show decimals for accuracy
                                 if sheet_name in ["Table A2 Custodial Acc", "Table A3 Equity Interest", "Excluded from A3", "Capital Gains"]:
-                                    cell.number_format = 'Rs.#,##0'  # No decimals for ITR sheets
+                                    cell.number_format = '"Rs."#,##0'  # No decimals for ITR sheets
                                 else:
-                                    cell.number_format = 'Rs.#,##0.00'  # Show 2 decimal places for reference sheets
+                                    cell.number_format = '"Rs."#,##0.00'  # Show 2 decimal places for reference sheets
 
                     # Date columns
                     elif header_value and 'Date' in str(header_value):
@@ -2453,7 +2453,7 @@ class ScheduleFAApp:
                                     value_cell.number_format = '#,##0.00'
                                 elif 'INR' in label or 'Peak Balance' in label:
                                     # Account Value (INR), Peak INR Value, A2 Peak Balance (INR)
-                                    value_cell.number_format = 'Rs.#,##0.00'
+                                    value_cell.number_format = '"Rs."#,##0.00'
 
                 # Special formatting for Capital Gains sheet
                 if sheet_name == "Capital Gains":
@@ -2475,7 +2475,7 @@ class ScheduleFAApp:
                             cell.font = total_font
                             cell.alignment = Alignment(horizontal='center', vertical='center')
                             if isinstance(cell.value, (int, float)):
-                                cell.number_format = 'Rs.#,##0'  # No decimals for ITR format
+                                cell.number_format = '"Rs."#,##0'  # No decimals for ITR format
 
                 # Freeze first row
                 ws.freeze_panes = ws['A2']
