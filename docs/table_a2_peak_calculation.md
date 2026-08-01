@@ -1,13 +1,15 @@
 # Table A2 - Peak Balance Calculation
 
 ## Overview
-Table A2 in Schedule FA reports the **custodial account summary** with opening balance, peak balance, and closing balance for the financial year.
+Table A2 in Schedule FA reports the **custodial account summary** with opening balance, peak balance, and closing balance for the **calendar year**.
+
+**IMPORTANT:** Schedule FA uses **calendar year (Jan 1 - Dec 31)**, NOT financial year (Apr 1 - Mar 31).
 
 ## What is Peak Balance?
 
-**Peak Balance** = The highest total value (in INR) of all holdings during the entire financial year (April 1 - March 31).
+**Peak Balance** = The highest total value (in INR) of all holdings during the entire **calendar year (January 1 - December 31)**.
 
-For FY {YEAR}-{YEAR+1}, this means the maximum value between **Apr 1, {FY_START_YEAR} to Mar 31, {FY_END_YEAR}**.
+For calendar year {YEAR}, this means the maximum value between **Jan 1, {YEAR} to Dec 31, {YEAR}**.
 
 ## How Peak Balance is Calculated
 
@@ -83,36 +85,46 @@ Total Peak = Peak of (AMD Portfolio + NVDA Portfolio combined)
 
 Each symbol has its own peak date, but we find the single day when the **total portfolio** was highest.
 
-### 4. Sold Shares
-Sold shares are **excluded** from peak calculation if sold before the peak date:
-- Sold on June 1, {YEAR}
-- Peak occurred on {PEAK_DATE}
-- Those shares don't count toward peak (you didn't own them on peak date)
+### 4. Sold Shares Within Calendar Year
+The code includes **all shares owned on each date** when calculating daily total:
+- If acquired before or on a date: included in that date's total
+- Peak is the maximum across all dates in the calendar year
+- Shares sold mid-year contribute to peak if they were owned on the peak date
+
+**Note:** The current implementation includes sold shares in the daily calculation. The actual peak reflects whichever day had the maximum total value.
 
 ## Formula Summary
 
 ```python
-# For each trading day in FY
+# For each trading day in calendar year (Jan 1 - Dec 31)
 daily_value = sum(quantity × stock_price_usd × ttbr for all holdings)
 
 # Peak balance
-peak_balance = max(daily_value across all trading days)
+peak_balance = max(daily_value across all calendar year trading days)
 ```
 
 ## Verification
 
 To verify peak balance:
 1. Open **"A2 Peak Calculation"** sheet
-2. Check the row marked with ⭐ PEAK
-3. Verify date and calculation
-4. Cross-reference with **"Reference - Daily Rates"** for stock prices and TTBR
+2. Check the **"PEAK SUMMARY"** side panel which shows:
+   - Peak Date
+   - Stock Price (USD) on that date
+   - TTBR on that date
+   - Account Value (USD) on that date
+   - Account Value (INR) on that date
+3. Scan the daily data to find the peak date row
+4. Verify: Account Value (INR) = Account Value (USD) × TTBR
+5. Cross-reference with **"Reference - Daily Rates"** for stock prices
 
 ## Example Output in Table A2
 
 | Field | Value |
 |-------|-------|
-| Opening Balance (Apr 1, {YEAR}) | ₹4,50,000 |
+| Opening Balance (Jan 1, {YEAR}) | ₹4,50,000 |
 | **Peak Balance During Period** | **₹5,45,412** |
-| Closing Balance (Mar 31, {YEAR+1}) | ₹5,10,000 |
+| Closing Balance (Dec 31, {YEAR}) | ₹5,10,000 |
+
+**Note:** Opening balance is typically 0 or calculated from previous year's closing. The script uses Dec 31 closing balance.
 
 The peak balance is the key compliance field for Schedule FA!
