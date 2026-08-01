@@ -1,7 +1,9 @@
-# Pre-FY Holdings - Initial Value Calculation
+# Pre-Calendar-Year Holdings - Initial Value Calculation
 
 ## Overview
-The **"Pre-FY Holdings Init Val"** sheet calculates the **Initial Value** for holdings acquired **before the financial year started**.
+The **"Pre-2025 Holdings Init Val"** sheet calculates the **Initial Value** for holdings acquired **before the calendar year started**.
+
+**IMPORTANT:** Schedule FA uses **calendar year** (Jan 1 - Dec 31), NOT financial year (Apr 1 - Mar 31).
 
 This is crucial for Schedule FA Table A3 compliance.
 
@@ -9,38 +11,38 @@ This is crucial for Schedule FA Table A3 compliance.
 
 **Initial Value** = The INR value of shares when they were acquired (acquisition date valuation).
 
-For shares acquired **before** the FY starts (e.g., acquired in 2024 for FY 2025-26), we need to calculate:
+For shares acquired **before** the calendar year starts (e.g., acquired in 2024 for calendar year 2025), we need to calculate:
 ```
 Initial Value (INR) = Quantity × Stock Price (USD) on Acquisition Date × TTBR on Acquisition Date
 ```
 
-## Why Pre-FY Holdings Need Special Handling
+## Why Pre-Calendar-Year Holdings Need Special Handling
 
 ### The Problem:
-When generating Schedule FA for **FY 2025-26** (Apr 1, 2025 - Mar 31, 2026):
-- SBI TTBR data covers **2025 only** (the target year)
+When generating Schedule FA for **calendar year 2025** (Jan 1, 2025 - Dec 31, 2025):
+- SBI TTBR data covers **2025 only** (the target calendar year)
 - But some shares were acquired in **2024** (or earlier)
 - We need TTBR for acquisition dates in **2024** to calculate their initial value
 
 ### The Solution:
 The script:
-1. **Detects** all acquisition dates that fall **before** the FY start date
+1. **Detects** all acquisition dates that fall **before** Jan 1, 2025 (calendar year start)
 2. **Downloads extra TTBR data** for those specific dates (with ±3 day buffer for weekends)
-3. **Caches** this pre-FY data alongside current-year data
+3. **Caches** this pre-2025 data alongside 2025 data
 4. **Calculates** initial value using historical stock price + historical TTBR
 
 ## Step-by-Step Process
 
-### Step 1: Identify Pre-FY Acquisitions
+### Step 1: Identify Pre-2025 Acquisitions
 From `ByStatus_expanded.xlsx` (E*TRADE Holdings):
 ```
-Example acquisitions:
-- 2024-07-20: 10 shares (RSU) → Pre-FY ✓
-- 2024-12-15: 6 shares (ESPP) → Pre-FY ✓
-- 2025-06-01: 8 shares (RSU) → Current FY ✗
+Example acquisitions for calendar year 2025:
+- 2024-07-20: 10 shares (RSU) → Pre-2025 ✓ (acquired before Jan 1, 2025)
+- 2024-12-15: 6 shares (ESPP) → Pre-2025 ✓ (acquired before Jan 1, 2025)
+- 2025-06-01: 8 shares (RSU) → Current year ✗ (acquired in 2025)
 ```
 
-For FY 2025-26, acquisitions before **April 1, 2025** need special handling.
+For calendar year 2025, acquisitions before **January 1, 2025** need special handling.
 
 ### Step 2: Download Historical TTBR
 The script calls `_fetch_sbi_rates_web()` with `extra_dates`:
@@ -52,7 +54,7 @@ extra_dates = ['2024-07-20', '2024-12-15']
 This fetches TTBR for those specific dates from historical GitHub data.
 
 ### Step 3: Download Historical Stock Prices
-For each pre-FY acquisition date:
+For each pre-2025 acquisition date:
 ```python
 # Get stock price on acquisition date
 stock_price_usd = yahoo_finance.get_price(symbol='AMD', date='2024-07-20')
@@ -103,7 +105,7 @@ The script:
 
 ## Excel Sheet Output
 
-The **"Pre-FY Holdings Init Val"** sheet shows:
+The **"Pre-2025 Holdings Init Val"** sheet shows:
 
 | Column | Description |
 |--------|-------------|
@@ -118,18 +120,18 @@ This is a **reference sheet** - the values are also used in **Table A3**.
 
 ## Example Scenario
 
-### Holdings for FY 2025-26:
+### Holdings for Calendar Year 2025 (Schedule FA: Jan 1 - Dec 31, 2025):
 
-**Pre-FY Holdings (need historical data):**
+**Pre-2025 Holdings (need historical data):**
 1. RSU Tranche A: 10 shares, acquired **2024-07-20**
 2. ESPP Tranche: 6 shares, acquired **2024-12-15**
 
-**Current-FY Holdings (use current-year data):**
+**Current Calendar Year Holdings (use 2025 data):**
 3. RSU Tranche B: 8 shares, acquired **2025-06-01**
 
 ### Initial Value Calculation:
 
-**Tranche A (Pre-FY):**
+**Tranche A (Pre-2025):**
 ```
 Date: 2024-07-20
 Quantity: 10
@@ -138,7 +140,7 @@ TTBR: 83.25
 Initial Value = ceil(10 × 147.50 × 83.25) = ₹1,22,794
 ```
 
-**ESPP (Pre-FY):**
+**ESPP (Pre-2025):**
 ```
 Date: 2024-12-15
 Quantity: 6
@@ -147,7 +149,7 @@ TTBR: 83.65
 Initial Value = ceil(6 × 152.30 × 83.65) = ₹76,465
 ```
 
-**Tranche B (Current-FY):**
+**Tranche B (Current Calendar Year):**
 ```
 Date: 2025-06-01
 Quantity: 8
@@ -158,22 +160,22 @@ Initial Value = ceil(8 × 180.00 × 84.20) = ₹1,21,248
 
 ## Console Output During Generation
 
-When the script detects pre-FY holdings:
+When the script detects pre-2025 holdings:
 ```
-[*] Found acquisition dates before FY 2025, downloading TTBR with ±3 day buffer for weekends
+[*] Found acquisition dates before calendar year 2025, downloading TTBR with ±3 day buffer for weekends
 [OK] Downloaded 278 SBI TTBR records for 2025
-[OK] Plus 8 specific dates before FY: 2024-07-17, 2024-07-18, ..., 2024-12-18
+[OK] Plus 8 specific dates before 2025: 2024-07-17, 2024-07-18, ..., 2024-12-18
 [OK] TTBR range: 82.50 to 86.49
 ```
 
 This confirms:
 - Current-year TTBR downloaded (278 records for 2025)
-- Pre-FY TTBR downloaded (8 records around 2024-05-15 and 2024-11-08)
+- Pre-2025 TTBR downloaded (8 records around 2024-05-15 and 2024-11-08)
 
 ## Important Notes
 
 ### 1. TTBR Source: GitHub Historical Data
-Pre-FY TTBR comes from:
+Pre-2025 TTBR comes from:
 ```
 https://github.com/sahilgupta/sbi-fx-ratekeeper
 ```
@@ -189,22 +191,22 @@ If the exact date is missing:
 ### 3. Stock Price Source: Yahoo Finance
 Yahoo Finance has historical data going back years, so this is usually not a problem.
 
-### 4. Multiple Pre-FY Tranches
+### 4. Multiple Pre-2025 Tranches
 If you have 10 tranches acquired in different years:
 - Script collects all unique acquisition dates
 - Downloads TTBR for all of them in one batch
 - Efficient: no duplicate downloads
 
-### 5. No Pre-FY Holdings?
-If all acquisitions are within the current FY:
-- This sheet will be **empty** (or show "No pre-FY holdings")
+### 5. No Pre-2025 Holdings?
+If all acquisitions are within calendar year 2025 (on or after Jan 1, 2025):
+- This sheet will be **empty** (or show "No acquisitions before calendar year start")
 - No historical TTBR download needed
 
 ## Verification Steps
 
-1. Open **"Pre-FY Holdings Init Val"** sheet
-2. Check each pre-FY tranche listed
-3. Verify acquisition date is before FY start date
+1. Open **"Pre-2025 Holdings Init Val"** sheet
+2. Check each pre-2025 tranche listed
+3. Verify acquisition date is before Jan 1, 2025 (calendar year start)
 4. Cross-check stock price with Yahoo Finance historical data
 5. Cross-check TTBR with `data/SBI_FOREX_CARD_RATES_USD.csv`
 6. Verify calculation: Qty × Price × TTBR
@@ -226,7 +228,7 @@ The initial values calculated here appear in **Table A3 - Equity Interest**:
 A: That would be incorrect. Initial value must reflect the **actual** exchange rate when shares were acquired.
 
 **Q: What if I acquired shares in 2020?**
-A: As long as the GitHub historical data has 2020 TTBR, it will work. The current dataset goes back to 2020-01-04.
+A: As long as the GitHub historical data has 2020 TTBR, it will work. The current dataset goes back to 2020-01-04. These will show in the pre-2025 holdings sheet.
 
 **Q: What if TTBR is missing for my acquisition date?**
 A: 
@@ -238,32 +240,32 @@ A:
 A: Handles long weekends and holiday clusters (e.g., Diwali + weekend = 4-5 days off)
 
 **Q: Does this affect capital gains calculation?**
-A: Yes! Initial value (cost basis) for pre-FY holdings uses this same historical TTBR + stock price.
+A: No! Capital Gains uses Rule 115(1)(f) - a different exchange rate rule (last day of month before sale). This sheet is only for Schedule FA Table A3 initial value.
 
-## Example: Full Pre-FY Flow
+## Example: Full Pre-2025 Flow
 
-**Scenario:** Generating Schedule FA for FY 2025-26
+**Scenario:** Generating Schedule FA for Calendar Year 2025
 
 **Holdings:**
-- RSU: 10 shares, acquired 2024-07-20
-- ESPP: 6 shares, acquired 2024-12-15
+- RSU: 10 shares, acquired 2024-07-20 (before Jan 1, 2025)
+- ESPP: 6 shares, acquired 2024-12-15 (before Jan 1, 2025)
 
 **Script Execution:**
 ```
 1. [*] Reading E*TRADE files...
-2. [OK] Discovered 2 tranches, 2 are pre-FY
+2. [OK] Discovered 2 tranches, 2 are pre-2025
 3. [*] Downloading SBI TTBR for 2025...
 4. [OK] Downloaded 278 records
-5. [*] Found pre-FY dates, downloading historical TTBR...
+5. [*] Found acquisition dates before calendar year 2025, downloading historical TTBR...
 6. [OK] Plus 8 specific dates: 2024-07-17 to 2024-07-23, 2024-12-12 to 2024-12-18
 7. [*] Scraping Yahoo Finance for AMD...
 8. [OK] Got prices for all dates including historical
 9. [*] Calculating initial values...
-10. [OK] Pre-FY Holdings:
+10. [OK] Pre-2025 Holdings:
     - 2024-07-20: 10 shares, $147.50, TTBR 83.25 → ₹1,22,794
     - 2024-12-15: 6 shares, $152.30, TTBR 83.65 → ₹76,465
-11. [OK] Saved to "Pre-FY Holdings Init Val" sheet
+11. [OK] Saved to "Pre-2025 Holdings Init Val" sheet
 ```
 
 **Output in Excel:**
-All pre-FY holdings listed with proper historical valuation! ✓
+All pre-2025 holdings listed with proper historical valuation! ✓
