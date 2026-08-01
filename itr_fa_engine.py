@@ -311,7 +311,7 @@ class ScheduleFAApp:
             'Indian Financial Year': [
                 'Assessment Year',
                 'Total Dividend Income (USD)',
-                'Total Dividend Income (INR ₹)',
+                'Total Dividend Income (INR Rs.)',
                 '',
                 'Quarter (Section 234C)',
                 '',
@@ -322,7 +322,7 @@ class ScheduleFAApp:
                 round(total_div_usd, 2),
                 int(total_div_inr),
                 '',
-                'Dividend Income (INR ₹)',
+                'Dividend Income (INR Rs.)',
                 '',
                 ''
             ]
@@ -395,11 +395,11 @@ class ScheduleFAApp:
         fsi_data['Unnamed: 2'][7] = 'TIN / Passport No.'
         fsi_data['Unnamed: 3'][7] = 'DTAA Article'
         fsi_data['Unnamed: 4'][7] = 'Dividend Income (USD)'
-        fsi_data['Unnamed: 5'][7] = 'Dividend Income (INR ₹)'
-        fsi_data['Unnamed: 6'][7] = 'Capital Gains Income (INR ₹)'
+        fsi_data['Unnamed: 5'][7] = 'Dividend Income (INR Rs.)'
+        fsi_data['Unnamed: 6'][7] = 'Capital Gains Income (INR Rs.)'
         fsi_data['Unnamed: 7'][7] = 'Tax Paid (USD)'
-        fsi_data['Unnamed: 8'][7] = 'Tax Paid (INR ₹)'
-        fsi_data['Unnamed: 9'][7] = 'Tax Relief Available (INR ₹)'
+        fsi_data['Unnamed: 8'][7] = 'Tax Paid (INR Rs.)'
+        fsi_data['Unnamed: 9'][7] = 'Tax Relief Available (INR Rs.)'
 
         # Add warning notes
         if total_div_inr == 0 and total_cg_inr == 0:
@@ -531,7 +531,7 @@ class ScheduleFAApp:
                 total_usd = df_result['Amount (USD)'].sum()
                 total_inr = df_result['Amount (INR)'].sum()
                 print(f"[OK] Found {len(df_result)} dividend transactions in {self.calendar_year}")
-                print(f"[OK] Total dividends: ${total_usd:.2f} USD = ₹{total_inr:,} INR")
+                print(f"[OK] Total dividends: ${total_usd:.2f} USD = Rs.{total_inr:,} INR")
 
             return df_result
 
@@ -1267,7 +1267,7 @@ class ScheduleFAApp:
             if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
                 dividend_for_this_lot = int(dividends_per_symbol[symbol])
                 dividend_assigned_symbols.add(symbol)
-                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+                print(f"[i] Assigning Rs.{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
 
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
@@ -1329,7 +1329,7 @@ class ScheduleFAApp:
             if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
                 dividend_for_this_lot = int(dividends_per_symbol[symbol])
                 dividend_assigned_symbols.add(symbol)
-                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+                print(f"[i] Assigning Rs.{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
 
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
@@ -1397,7 +1397,7 @@ class ScheduleFAApp:
             if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
                 dividend_for_this_lot = int(dividends_per_symbol[symbol])
                 dividend_assigned_symbols.add(symbol)
-                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+                print(f"[i] Assigning Rs.{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
 
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
@@ -1651,7 +1651,7 @@ class ScheduleFAApp:
                 "GrossAmtPaidCredited": total_sale_proceeds_inr,
                 "NatureOfAmount": "P"  # P = Proceeds from Sale or Redemption of Financial Assets
             })
-            print(f"[i] Table A2: Creating TWO rows (Dividend: ₹{total_dividends_inr:,}, Sale Proceeds: ₹{total_sale_proceeds_inr:,})")
+            print(f"[i] Table A2: Creating TWO rows (Dividend: Rs.{total_dividends_inr:,}, Sale Proceeds: Rs.{total_sale_proceeds_inr:,})")
 
         # Case 2: Only dividends (no sales) → Create ONE row
         elif total_dividends_inr > 0:
@@ -1660,7 +1660,7 @@ class ScheduleFAApp:
                 "GrossAmtPaidCredited": total_dividends_inr,
                 "NatureOfAmount": "D"  # D = Dividend
             })
-            print(f"[i] Table A2: Creating ONE row (Dividend only: ₹{total_dividends_inr:,})")
+            print(f"[i] Table A2: Creating ONE row (Dividend only: Rs.{total_dividends_inr:,})")
 
         # Case 3: Only sales (no dividends) → Create ONE row
         elif total_sale_proceeds_inr > 0:
@@ -1669,7 +1669,7 @@ class ScheduleFAApp:
                 "GrossAmtPaidCredited": total_sale_proceeds_inr,
                 "NatureOfAmount": "P"  # P = Proceeds from Sale
             })
-            print(f"[i] Table A2: Creating ONE row (Sale Proceeds only: ₹{total_sale_proceeds_inr:,})")
+            print(f"[i] Table A2: Creating ONE row (Sale Proceeds only: Rs.{total_sale_proceeds_inr:,})")
 
         # Case 4: No dividends AND no sales → Create ONE row with N (No Amount)
         else:
@@ -2211,8 +2211,8 @@ class ScheduleFAApp:
         # Generate Schedule OS and FSI
         print(f"\n[*] Generating Schedule OS and Schedule FSI...")
         df_schedule_os, df_schedule_fsi, df_div_os = self._calculate_schedule_os_fsi(df_dividends, pd.DataFrame(capital_gains_data))
-        print(f"[OK] Schedule OS: Total dividend income ₹{df_schedule_os[self.indian_fy][2]:,}" if len(df_schedule_os) > 2 else "[OK] Schedule OS: No dividends")
-        print(f"[OK] Schedule FSI: Total foreign income ₹{df_schedule_fsi[self.indian_fy][3]:,}" if len(df_schedule_fsi) > 3 else "[OK] Schedule FSI: No foreign income")
+        print(f"[OK] Schedule OS: Total dividend income Rs.{df_schedule_os[self.indian_fy][2]:,}" if len(df_schedule_os) > 2 else "[OK] Schedule OS: No dividends")
+        print(f"[OK] Schedule FSI: Total foreign income Rs.{df_schedule_fsi[self.indian_fy][3]:,}" if len(df_schedule_fsi) > 3 else "[OK] Schedule FSI: No foreign income")
 
         # Create two separate tables for Capital Gains sheet
 
@@ -2403,9 +2403,9 @@ class ScheduleFAApp:
                                 # A2, A3, and Capital Gains sheets: integers only (ITR portal requirement)
                                 # Other sheets: show decimals for accuracy
                                 if sheet_name in ["Table A2 Custodial Acc", "Table A3 Equity Interest", "Excluded from A3", "Capital Gains"]:
-                                    cell.number_format = '₹#,##0'  # No decimals for ITR sheets
+                                    cell.number_format = 'Rs.#,##0'  # No decimals for ITR sheets
                                 else:
-                                    cell.number_format = '₹#,##0.00'  # Show 2 decimal places for reference sheets
+                                    cell.number_format = 'Rs.#,##0.00'  # Show 2 decimal places for reference sheets
 
                     # Date columns
                     elif header_value and 'Date' in str(header_value):
@@ -2453,7 +2453,7 @@ class ScheduleFAApp:
                                     value_cell.number_format = '#,##0.00'
                                 elif 'INR' in label or 'Peak Balance' in label:
                                     # Account Value (INR), Peak INR Value, A2 Peak Balance (INR)
-                                    value_cell.number_format = '₹#,##0.00'
+                                    value_cell.number_format = 'Rs.#,##0.00'
 
                 # Special formatting for Capital Gains sheet
                 if sheet_name == "Capital Gains":
@@ -2475,7 +2475,7 @@ class ScheduleFAApp:
                             cell.font = total_font
                             cell.alignment = Alignment(horizontal='center', vertical='center')
                             if isinstance(cell.value, (int, float)):
-                                cell.number_format = '₹#,##0'  # No decimals for ITR format
+                                cell.number_format = 'Rs.#,##0'  # No decimals for ITR format
 
                 # Freeze first row
                 ws.freeze_panes = ws['A2']
@@ -2494,8 +2494,8 @@ class ScheduleFAApp:
                             if cell.value is not None:
                                 # For formatted numbers, account for the formatting
                                 if isinstance(cell.value, (int, float)):
-                                    # Currency with symbol (₹1,234.56 or $1,234.56)
-                                    if cell.number_format and ('₹' in cell.number_format or '$' in cell.number_format):
+                                    # Currency with symbol (Rs.1,234.56 or $1,234.56)
+                                    if cell.number_format and ('Rs.' in cell.number_format or '$' in cell.number_format):
                                         # Account for currency symbol, commas, and decimals
                                         formatted_length = len(f"{cell.value:,.2f}") + 2  # +2 for symbol and space
                                     # Plain numbers with decimals
