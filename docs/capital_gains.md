@@ -3,17 +3,117 @@
 ## Overview
 The **Capital Gains** sheet calculates tax liability on stock sales, categorized as Long-Term Capital Gains (LTCG) or Short-Term Capital Gains (STCG) based on holding period.
 
-## Holding Period Rules
+**Sources:** [ITRFA.in Schedule CG Blog](https://itrfa.in/blog/schedule-cg-rsu-espp) | [ITRFA.in SBI TTBR Rule 115](https://itrfa.in/blog/sbi-ttbr-rule-115)
 
-### Long-Term Capital Gains (LTCG)
+---
+
+## CRITICAL: Exchange Rate Rule - Income-tax Rule 115(1)(f)
+
+**Schedule CG uses a DIFFERENT exchange rate rule than Schedule FA!**
+
+### Rule 115(1)(f) for Capital Gains
+**"For income chargeable under the head 'Capital gains', the specified date is the last day of the month immediately preceding the month in which the capital asset is transferred (sold)"**
+
+**CRITICAL POINTS:**
+1. Use **last day of month BEFORE sale month** (NOT exact sale date!)
+2. Use the **SAME rate** for BOTH proceeds AND cost of acquisition
+3. This is DIFFERENT from Schedule FA which uses exact dates
+
+**Examples:**
+- Sale on Aug 15, 2025 → Use **Jul 31, 2025** TTBR for BOTH proceeds and cost basis
+- Sale on Nov 1, 2025 → Use **Oct 31, 2025** TTBR for BOTH proceeds and cost basis
+- Sale on Jan 1, 2026 → Use **Dec 31, 2025** TTBR for BOTH proceeds and cost basis
+
+**Why it matters:**
+- Form 16 uses Rule 115(1)(a): Last day of month BEFORE vest month
+- Schedule FA uses exact date (per CBDT filing instructions)
+- Schedule CG uses last day of month BEFORE sale month (per Rule 115(1)(f))
+- **All three are different dates with different rates!**
+
+**Common mistake:** Using exact sale/acquisition dates (WRONG!)
+
+**Implementation:** Lines 1552-1602 in `itr_fa_engine.py`
+
+---
+
+## Tax Classification (Unlisted Securities)
+
+### Foreign Company Shares = UNLISTED Securities
+RSU/ESPP shares of foreign companies (e.g., AMD) are **unlisted securities** for Indian tax purposes (no STT paid on Indian exchange).
+
+**Threshold:** 24 months (NOT 12 months which applies to STT-paid Indian listed equity)
+
+### Holding Period Calculation
+**CRITICAL: Use calendar months, NOT day count!**
+- 24 months can be 730 OR 731 days depending on leap year
+- Sale on 24-month anniversary = STILL short-term (per Section 2(42A): "not more than 24 months")
+- Day count approximation (730 days) FAILS in leap years
+
+**Example:**
+```
+Acquired: Jan 10, 2024
+Sold: Jan 10, 2026  (exactly 24 months)
+Classification: STCG (not "more than" 24 months)
+```
+
+### Tax Rates & Sections
+
+#### Long-Term Capital Gains (LTCG)
 - **Holding Period:** > 24 months
+- **Section:** 112
 - **Tax Rate:** 12.5%
-- **Calculation:** Always rounded UP using `math.ceil()`
+- **Indexation:** NONE (per Finance Act 2024 for transfers on/after July 23, 2024)
+- **NOT applicable:** Section 112A (that's for STT-paid Indian listed equity)
 
-### Short-Term Capital Gains (STCG)
+#### Short-Term Capital Gains (STCG)
 - **Holding Period:** ≤ 24 months
-- **Tax Rate:** 31.2%
-- **Calculation:** Always rounded UP using `math.ceil()`
+- **Section:** 48
+- **Tax Rate:** 31.2% (slab rate: 30% + 4% cess)
+- **NOT applicable:** Section 111A (that's for STT-paid Indian listed equity)
+
+**Calculation:** Always rounded UP using `math.ceil()`
+
+**Implementation:** Lines 1525-1541 in `itr_fa_engine.py`
+
+---
+
+## ESPP Cost Basis - Section 49(2AA)
+
+### The Rule
+**Section 49(2AA):** For ESPP shares, cost of acquisition = **FMV on purchase date** (already taxed as perquisite), NOT the discounted price you paid.
+
+### Why It Matters
+**E*TRADE reports:**
+- "Adjusted Cost Basis" = discounted purchase price (e.g., $118.59 with 15% discount)
+
+**Indian Tax Law requires:**
+- Cost basis = FMV on purchase date (e.g., $152.39)
+- The discount was already taxed as perquisite in Form 16
+
+**Impact:**
+- Using discounted price = **DOUBLE TAXATION** of the discount amount!
+- For 15% ESPP discount on large sale: thousands of rupees in overpaid tax
+
+**Example:**
+```
+ESPP Purchase: 100 shares at 15% discount
+FMV: $152.39/share → Total FMV = $15,239
+Discounted Price: $118.59/share → Paid = $11,859
+Discount: $3,380 (already taxed as salary perquisite)
+
+WRONG cost basis: $11,859 → Capital gain overstated by $3,380
+CORRECT cost basis: $15,239 → No double taxation
+```
+
+**RSU vs ESPP:**
+- **RSU:** "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
+- **ESPP:** Must use "Purchase Date Fair Mkt. Value" column
+
+**Prerequisite:** Employer must have taxed the discount as perquisite (normal case for qualified ESPP)
+
+**Implementation:** Lines 1545-1551 in `itr_fa_engine.py`
+
+---
 
 ## Step-by-Step Calculation
 
@@ -49,39 +149,59 @@ Holding Period (months) = (Sale Date - Acquisition Date) / 30 days
 - > 24 months → LTCG
 - ≤ 24 months → STCG
 
-### Step 4: Calculate Gross Proceeds (INR)
+### Step 4: Determine Rule 115(1)(f) Specified Date
 ```python
-Gross Proceeds (INR) = math.ceil(Quantity × Sale Price (USD) × TTBR on Sale Date)
+# Calculate last day of month BEFORE sale month
+if sale_month == 1:
+    specified_date = Dec 31 of previous year
+else:
+    specified_date = Last day of (sale_month - 1)
 ```
 
 **Example:**
-- Sold: 10 shares
+- Sale Date: Aug 15, 2025
+- Sale Month: August (8)
+- **Specified Date = Jul 31, 2025** (last day of July)
+
+### Step 5: Calculate Gross Proceeds (INR)
+```python
+# CRITICAL: Use Rule 115(1)(f) specified date TTBR, NOT sale date TTBR!
+Gross Proceeds (INR) = math.ceil(Quantity × Sale Price (USD) × TTBR on Specified Date)
+```
+
+**Example:**
+- Sold: 10 shares on Aug 15, 2025
 - Sale Price: $200 USD
-- TTBR on sale date: 84.50
+- Specified Date: Jul 31, 2025
+- TTBR on Jul 31, 2025: 84.50
 - **Gross Proceeds = ceil(10 × 200 × 84.50) = ₹1,69,000**
 
-### Step 5: Calculate Cost Basis (INR)
+### Step 6: Calculate Cost Basis (INR)
 ```python
-Cost Basis (INR) = math.ceil(Quantity × Acquisition Price (USD) × TTBR on Acquisition Date)
+# CRITICAL: Use SAME Rule 115(1)(f) specified date TTBR (NOT acquisition date TTBR!)
+Cost Basis (INR) = math.ceil(Quantity × Acquisition Price (USD) × TTBR on Specified Date)
 ```
 
 **Example:**
 - Acquired: 10 shares on 2023-06-10
 - Acquisition Price: $150 USD
-- TTBR on 2023-06-10: 82.00
-- **Cost Basis = ceil(10 × 150 × 82.00) = ₹1,23,000**
+- **Specified Date: Jul 31, 2025** (SAME as proceeds!)
+- TTBR on Jul 31, 2025: 84.50 (SAME as proceeds!)
+- **Cost Basis = ceil(10 × 150 × 84.50) = ₹1,26,750**
 
-### Step 6: Calculate Capital Gain
+**CRITICAL:** Both proceeds and cost basis use the SAME specified date TTBR!
+
+### Step 7: Calculate Capital Gain
 ```python
 Capital Gain = Gross Proceeds - Cost Basis
 ```
 
 **Example:**
 - Gross Proceeds: ₹1,69,000
-- Cost Basis: ₹1,23,000
-- **Capital Gain = ₹46,000**
+- Cost Basis: ₹1,26,750
+- **Capital Gain = ₹42,250**
 
-### Step 7: Calculate Tax
+### Step 8: Calculate Tax
 ```python
 # For LTCG (>24 months)
 Tax = math.ceil(Capital Gain × 0.125)
@@ -174,23 +294,27 @@ The **"Capital Gains"** sheet contains:
 
 | Column | Description |
 |--------|-------------|
-| Symbol | Stock ticker (e.g., AMD) |
-| Sale Date | When shares were sold |
+| Nature | Type and quantity (e.g., "RSU (10 shares)", "ESPP (5 shares) - FUTURE") |
 | Quantity | Number of shares sold |
 | Acquisition Date | When those shares were acquired |
-| Holding Period | Months held |
-| Type | LTCG or STCG |
-| Gross Proceeds (INR) | Sale value in rupees |
-| Cost Basis (INR) | Purchase cost in rupees |
+| Sale Date | When shares were sold |
+| **Rule 115(1)(f) Specified Date** | Last day of month BEFORE sale month (exchange rate date) |
+| **TTBR (INR/USD)** | Exchange rate used (SAME for proceeds and cost basis) |
+| Holding Period (months) | Calendar months held |
+| Tax Type | LTCG or STCG |
+| **Section** | Section 112 (LTCG) or Section 48 (STCG) |
+| Cost Basis (INR) | Purchase cost in rupees (using specified date TTBR) |
+| Sale Proceeds (INR) | Sale value in rupees (using specified date TTBR) |
 | Capital Gain (INR) | Profit |
 | Tax Rate | 12.5% or 31.2% |
-| Tax (INR) | Tax liability |
+| Tax Amount (INR) | Tax liability |
 
 Plus a summary section with:
-- Total LTCG
-- Total STCG
-- Combined Tax
-- Advance Tax Schedule
+- Total Advance Tax Schedule (Rule 234C)
+- By Jul 15 (15%)
+- By Sep 15 (45%)
+- By Dec 15 (75%)
+- By Mar 15 (100%)
 
 ## Date Filtering
 
@@ -211,10 +335,12 @@ math.ceil(5750.001) = 5751  ✓
 round(5750.001) = 5750      ✗ (risky - underpayment)
 ```
 
-### 2. TTBR Date Matching
-- Sale: Use TTBR on **sale date**
-- Acquisition: Use TTBR on **acquisition date**
-- If TTBR missing for a date, the script will fail (needs manual intervention)
+### 2. TTBR Date Matching - Rule 115(1)(f)
+**CRITICAL:** Schedule CG uses Income-tax Rule 115(1)(f), NOT exact dates!
+- **Both proceeds and cost basis:** Use TTBR on **last day of month BEFORE sale month**
+- **Same rate for both:** ONE specified date per sale, not separate dates
+- **Different from Schedule FA:** Schedule FA uses exact acquisition/sale dates
+- If TTBR missing for specified date, the script will fail (needs manual intervention)
 
 ### 3. FIFO is Mandatory
 - Cannot choose which shares to sell (tax rule)

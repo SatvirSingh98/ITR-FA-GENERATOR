@@ -1522,18 +1522,26 @@ class ScheduleFAApp:
                 else:
                     nature = f"Stock ({qty} shares)"
 
-                # Calculate holding period in months
+                # Calculate holding period in CALENDAR MONTHS (not days!)
+                # Section 2(42A): "not more than 24 months" for unlisted securities (foreign shares)
+                # CRITICAL: Sale on 24-month anniversary = STILL short-term (not more than 24 months includes the anniversary)
+                # CRITICAL: Use calendar months, NOT 730 days (leap years: 24 months can be 731 days)
                 holding_months = (sale_date.year - acq_date.year) * 12 + (sale_date.month - acq_date.month)
 
-                # Determine tax type and rate
-                # LTCG (Long Term Capital Gains): > 24 months = 12.5% tax
-                # STCG (Short Term Capital Gains): <= 24 months = 31.2% tax
+                # Determine tax type, rate, and section
+                # Foreign company shares = UNLISTED securities (no STT on Indian exchange)
+                # Threshold: 24 months (NOT 12 months which applies to STT-paid Indian listed equity)
+                #
+                # LTCG (Long Term): > 24 months → Section 112 (no indexation per Finance Act 2024)
+                # STCG (Short Term): ≤ 24 months → Section 48 (taxed at slab rate)
                 if holding_months > 24:
                     tax_type = "LTCG"
-                    tax_rate = 0.125  # 12.5%
+                    tax_section = "Section 112"
+                    tax_rate = 0.125  # 12.5% (no indexation benefit)
                 else:
                     tax_type = "STCG"
-                    tax_rate = 0.312  # 31.2%
+                    tax_section = "Section 48"
+                    tax_rate = 0.312  # 31.2% (slab rate, assuming 30% + 4% cess)
 
                 # Calculate proceeds and cost basis in INR
                 import math
@@ -1551,30 +1559,47 @@ class ScheduleFAApp:
 
                 cost_basis_usd = unit_cost_basis * qty
 
-                # Get TTBR from SBI data (with forward-fill for holidays)
-                sale_date_str = sale_date.strftime('%Y-%m-%d')
-                acq_date_str = acq_date.strftime('%Y-%m-%d')
+                # CRITICAL: Income-tax Rule 115(1)(f) for Schedule CG (Capital Gains)
+                # "For income chargeable under the head 'Capital gains', the specified date is
+                # the last day of the month immediately preceding the month in which the capital
+                # asset is transferred (sold)"
+                #
+                # This is DIFFERENT from Schedule FA which uses exact date!
+                # - Schedule FA (Table A3): Exact acquisition/sale date (CBDT filing instructions)
+                # - Schedule CG: Last day of month BEFORE sale month (Rule 115(1)(f))
+                #
+                # Example: Sale on Aug 15, 2025 → Use Jul 31, 2025 TTBR
+                # Example: Sale on Jan 1, 2026 → Use Dec 31, 2025 TTBR
+                #
+                # BOTH proceeds and cost basis use the SAME rate (the specified date rate)
 
-                # Get TTBR for sale date
-                sale_ttbr_df = self.df_sbi[self.df_sbi['Date'] == sale_date_str]
-                if not sale_ttbr_df.empty:
-                    sale_ttbr = sale_ttbr_df['TTBR'].values[0]
+                # Calculate specified date per Rule 115(1)(f)
+                if sale_date.month == 1:
+                    # Sale in January → last day of December previous year
+                    specified_year = sale_date.year - 1
+                    specified_month = 12
                 else:
-                    # Forward-fill: use previous available rate
-                    prior_dates = self.df_sbi[self.df_sbi['Date'] < sale_date_str].sort_values('Date', ascending=False)
-                    sale_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+                    # Last day of previous month
+                    specified_year = sale_date.year
+                    specified_month = sale_date.month - 1
 
-                # Get TTBR for acquisition date
-                acq_ttbr_df = self.df_sbi[self.df_sbi['Date'] == acq_date_str]
-                if not acq_ttbr_df.empty:
-                    acq_ttbr = acq_ttbr_df['TTBR'].values[0]
+                # Get last day of the specified month
+                import calendar
+                last_day = calendar.monthrange(specified_year, specified_month)[1]
+                specified_date = datetime(specified_year, specified_month, last_day).strftime('%Y-%m-%d')
+
+                # Get TTBR for the specified date (same rate for BOTH proceeds and cost basis)
+                specified_ttbr_df = self.df_sbi[self.df_sbi['Date'] == specified_date]
+                if not specified_ttbr_df.empty:
+                    specified_ttbr = specified_ttbr_df['TTBR'].values[0]
                 else:
-                    # Forward-fill: use previous available rate
-                    prior_dates = self.df_sbi[self.df_sbi['Date'] < acq_date_str].sort_values('Date', ascending=False)
-                    acq_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+                    # Forward-fill: use previous available rate (for weekends/holidays)
+                    prior_dates = self.df_sbi[self.df_sbi['Date'] < specified_date].sort_values('Date', ascending=False)
+                    specified_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
 
-                gross_proceeds = math.ceil(proceeds_usd * sale_ttbr)  # Round UP proceeds
-                cost_basis = math.ceil(cost_basis_usd * acq_ttbr)  # Round UP cost basis
+                # Use SAME rate for both proceeds and cost basis (per Rule 115(1)(f))
+                gross_proceeds = math.ceil(proceeds_usd * specified_ttbr)  # Round UP proceeds
+                cost_basis = math.ceil(cost_basis_usd * specified_ttbr)  # Round UP cost basis (same rate!)
                 capital_gain = gross_proceeds - cost_basis  # Already rounded up
                 tax_amount = math.ceil(capital_gain * tax_rate)  # Round UP tax
 
@@ -1606,8 +1631,11 @@ class ScheduleFAApp:
                     'Quantity': qty,
                     'Acquisition Date': acq_date_str,
                     'Sale Date': sale_date_str,
+                    'Rule 115(1)(f) Specified Date': specified_date,  # Exchange rate date
+                    'TTBR (INR/USD)': round(specified_ttbr, 2),  # Exchange rate used
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
+                    'Section': tax_section,
                     'Cost Basis (INR)': cost_basis,  # Rounded up
                     'Sale Proceeds (INR)': gross_proceeds,  # Rounded up
                     'Capital Gain (INR)': capital_gain,  # Rounded up
@@ -1638,15 +1666,17 @@ class ScheduleFAApp:
                 else:
                     nature = f"Stock ({qty} shares) - FUTURE"
 
-                # Calculate holding period
+                # Calculate holding period in CALENDAR MONTHS (not days!)
                 holding_months = (sale_date.year - acq_date.year) * 12 + (sale_date.month - acq_date.month)
 
-                # Determine tax type and rate
+                # Determine tax type, rate, and section
                 if holding_months > 24:
                     tax_type = "LTCG"
+                    tax_section = "Section 112"
                     tax_rate = 0.125
                 else:
                     tax_type = "STCG"
+                    tax_section = "Section 48"
                     tax_rate = 0.312
 
                 # Calculate proceeds and cost basis
@@ -1662,28 +1692,38 @@ class ScheduleFAApp:
 
                 cost_basis_usd = unit_cost_basis * qty
 
-                # Get TTBR for dates
+                # CRITICAL: Income-tax Rule 115(1)(f) for Schedule CG
+                # Calculate specified date per Rule 115(1)(f) - same logic as current sales
                 sale_date_str = sale_date.strftime('%Y-%m-%d')
                 acq_date_str = acq_date.strftime('%Y-%m-%d')
 
-                # Sale TTBR (may be in future, use latest available)
-                sale_ttbr_df = self.df_sbi[self.df_sbi['Date'] == sale_date_str]
-                if not sale_ttbr_df.empty:
-                    sale_ttbr = sale_ttbr_df['TTBR'].values[0]
+                if sale_date.month == 1:
+                    specified_year = sale_date.year - 1
+                    specified_month = 12
                 else:
-                    # Use latest TTBR as estimate for future dates
-                    sale_ttbr = self.df_sbi.sort_values('Date', ascending=False)['TTBR'].values[0] if not self.df_sbi.empty else 89.47
+                    specified_year = sale_date.year
+                    specified_month = sale_date.month - 1
 
-                # Acquisition TTBR
-                acq_ttbr_df = self.df_sbi[self.df_sbi['Date'] == acq_date_str]
-                if not acq_ttbr_df.empty:
-                    acq_ttbr = acq_ttbr_df['TTBR'].values[0]
+                import calendar
+                last_day = calendar.monthrange(specified_year, specified_month)[1]
+                specified_date = datetime(specified_year, specified_month, last_day).strftime('%Y-%m-%d')
+
+                # Get TTBR for specified date (may be in future, use latest available as estimate)
+                specified_ttbr_df = self.df_sbi[self.df_sbi['Date'] == specified_date]
+                if not specified_ttbr_df.empty:
+                    specified_ttbr = specified_ttbr_df['TTBR'].values[0]
                 else:
-                    prior_dates = self.df_sbi[self.df_sbi['Date'] < acq_date_str].sort_values('Date', ascending=False)
-                    acq_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+                    # For future sales, use latest TTBR as estimate
+                    prior_dates = self.df_sbi[self.df_sbi['Date'] < specified_date].sort_values('Date', ascending=False)
+                    if not prior_dates.empty:
+                        specified_ttbr = prior_dates['TTBR'].values[0]
+                    else:
+                        # If specified date is beyond our TTBR data, use latest available
+                        specified_ttbr = self.df_sbi.sort_values('Date', ascending=False)['TTBR'].values[0] if not self.df_sbi.empty else 89.47
 
-                gross_proceeds = math.ceil(proceeds_usd * sale_ttbr)
-                cost_basis = math.ceil(cost_basis_usd * acq_ttbr)
+                # Use SAME rate for both proceeds and cost basis (per Rule 115(1)(f))
+                gross_proceeds = math.ceil(proceeds_usd * specified_ttbr)
+                cost_basis = math.ceil(cost_basis_usd * specified_ttbr)  # Same rate!
                 capital_gain = gross_proceeds - cost_basis
                 tax_amount = math.ceil(capital_gain * tax_rate)
 
@@ -1716,8 +1756,11 @@ class ScheduleFAApp:
                     'Quantity': qty,
                     'Acquisition Date': acq_date_str,
                     'Sale Date': sale_date_str,
+                    'Rule 115(1)(f) Specified Date': specified_date,  # Exchange rate date
+                    'TTBR (INR/USD)': round(specified_ttbr, 2),  # Exchange rate used
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
+                    'Section': tax_section,
                     'Cost Basis (INR)': cost_basis,
                     'Sale Proceeds (INR)': gross_proceeds,
                     'Capital Gain (INR)': capital_gain,
@@ -1737,8 +1780,11 @@ class ScheduleFAApp:
             'Quantity': item['Quantity'],
             'Acquisition Date': item['Acquisition Date'],
             'Sale Date': item['Sale Date'],
+            'Rule 115(1)(f) Specified Date': item['Rule 115(1)(f) Specified Date'],
+            'TTBR (INR/USD)': item['TTBR (INR/USD)'],
             'Holding Period (months)': item['Holding Period (months)'],
             'Tax Type': item['Tax Type'],
+            'Section': item['Section'],
             'Cost Basis (INR)': item['Cost Basis (INR)'],
             'Sale Proceeds (INR)': item['Sale Proceeds (INR)'],
             'Capital Gain (INR)': item['Capital Gain (INR)'],
@@ -1771,8 +1817,10 @@ class ScheduleFAApp:
         # If no sales, create empty DataFrames with columns
         if df_sale_details.empty:
             df_sale_details = pd.DataFrame(columns=[
-                'Nature', 'Quantity', 'Acquisition Date', 'Sale Date', 'Holding Period (months)',
-                'Tax Type', 'Cost Basis (INR)', 'Sale Proceeds (INR)', 'Capital Gain (INR)',
+                'Nature', 'Quantity', 'Acquisition Date', 'Sale Date',
+                'Rule 115(1)(f) Specified Date', 'TTBR (INR/USD)',
+                'Holding Period (months)', 'Tax Type', 'Section',
+                'Cost Basis (INR)', 'Sale Proceeds (INR)', 'Capital Gain (INR)',
                 'Tax Rate', 'Tax Amount (INR)'
             ])
 

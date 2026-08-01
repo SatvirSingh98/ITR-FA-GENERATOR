@@ -131,9 +131,16 @@ Generated in `outputs/` folder:
 
 The tool automatically calculates capital gains for stock sales AND future sales for advance tax planning:
 
-### Tax Rates
-- **LTCG** (Long Term Capital Gains) - Holding > 24 months: **12.5% tax**
-- **STCG** (Short Term Capital Gains) - Holding ≤ 24 months: **31.2% tax**
+### Tax Classification (Per ITRFA.in)
+Foreign company shares (RSU/ESPP) = **UNLISTED securities** (no STT on Indian exchange)
+
+**Holding Period Threshold:** 24 months (NOT 12 months for STT-paid Indian listed equity)
+- **CRITICAL:** Use **calendar months**, NOT day count (730 days fails in leap years!)
+- **CRITICAL:** Sale on 24-month anniversary = STILL short-term (per Section 2(42A))
+
+**Tax Rates & Sections:**
+- **LTCG** (Long Term) - Holding > 24 months: **12.5% tax** (Section 112, no indexation)
+- **STCG** (Short Term) - Holding ≤ 24 months: **31.2% tax** (Section 48, slab rate)
 
 ### Advance Tax Schedule (Income Tax Rule 234C)
 The Capital Gains sheet shows advance tax installments for:
@@ -145,6 +152,21 @@ Advance tax payment schedule (based on sale date):
 - **By Sep 15:** 45% of total tax (cumulative)
 - **By Dec 15:** 75% of total tax (cumulative)
 - **By Mar 15:** 100% of total tax (cumulative)
+
+### Exchange Rate Rules (CRITICAL - Different for FA vs CG!)
+**Schedule FA (Table A2/A3):**
+- **Rule:** CBDT filing instructions
+- **Rate:** **Exact date** SBI TTBR
+- **Example:** Vest on Jul 15, 2025 → Use Jul 15, 2025 TTBR
+
+**Schedule CG (Capital Gains):**
+- **Rule:** Income-tax Rule 115(1)(f)
+- **Rate:** **Last day of month BEFORE sale month** SBI TTBR
+- **CRITICAL:** SAME rate for BOTH proceeds AND cost basis
+- **Example:** Sale on Aug 15, 2025 → Use **Jul 31, 2025** TTBR for everything
+- **Example:** Sale on Jan 1, 2026 → Use **Dec 31, 2025** TTBR for everything
+
+**Common mistake:** Using exact sale/acquisition dates for Capital Gains (wrong! Use Rule 115(1)(f))
 
 ### Date Ranges (Per ITRFA.in Guidance)
 - **Table A3 (Schedule FA):** Calendar year only (Jan 1 - Dec 31)
