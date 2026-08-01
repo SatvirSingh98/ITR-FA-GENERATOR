@@ -33,6 +33,23 @@ Check `outputs/` folder for generated files.
 
 ---
 
+## Important Features
+
+### ✅ ESPP Cost Basis Fix (Section 49(2AA))
+The tool correctly uses **FMV on purchase date** for ESPP shares (NOT the discounted purchase price):
+- **E*TRADE reports:** Adjusted Cost Basis = discounted price (e.g., $118.59 with 15% discount)
+- **Indian Tax Law:** Must use FMV on purchase date (e.g., $152.39)
+- **Tool uses:** "Purchase Date Fair Mkt. Value" column from E*TRADE
+- **Impact:** Significantly higher initial value and cost basis for ESPP shares
+- **Per ITRFA.in:** "If employer taxed the discount, Indian cost = FMV on purchase date"
+
+### ✅ Future Sales for Advance Tax Planning
+The tool includes future sales (after current FY) in Capital Gains sheet:
+- Shows estimated tax amount for sales that haven't happened yet
+- Calculates when to pay advance tax (Jul/Sep/Dec/Mar of next FY)
+- Helps you plan: "If shares sell in Jun 2026, pay by Sep 15, 2026"
+- Marked with "- FUTURE" in nature column
+
 ## Important Limitations
 
 ### ⚠️ E*TRADE Only
@@ -112,22 +129,28 @@ Generated in `outputs/` folder:
 
 ## Capital Gains & Advance Tax
 
-The tool automatically calculates capital gains for stock sales:
+The tool automatically calculates capital gains for stock sales AND future sales for advance tax planning:
 
 ### Tax Rates
 - **LTCG** (Long Term Capital Gains) - Holding > 24 months: **12.5% tax**
 - **STCG** (Short Term Capital Gains) - Holding ≤ 24 months: **31.2% tax**
 
 ### Advance Tax Schedule (Income Tax Rule 234C)
-For sales in the current/future FY, the tool calculates advance tax payment schedule:
+The Capital Gains sheet shows advance tax installments for:
+1. **Current FY Sales** (Jan 2025 - Mar 2026): Tax to be paid with this year's ITR
+2. **Future Sales** (Apr 2026 onwards): Advance tax planning for next FY
+
+Advance tax payment schedule (based on sale date):
 - **By Jul 15:** 15% of total tax
 - **By Sep 15:** 45% of total tax (cumulative)
 - **By Dec 15:** 75% of total tax (cumulative)
 - **By Mar 15:** 100% of total tax (cumulative)
 
-### Date Filtering
-- **Included in Capital Gains:** Sales from current FY onwards (for tax planning)
-- **Excluded:** Sales from previous years (already reported)
+### Date Ranges (Per ITRFA.in Guidance)
+- **Table A3 (Schedule FA):** Calendar year only (Jan 1 - Dec 31)
+- **Capital Gains (Schedule CG):** Extended period (Jan 1 - Mar 31 next year) + Future sales
+- **Why different?** Schedule FA uses calendar year, but Indian FY for capital gains is Apr-Mar
+- Sales in Jan-Mar next year: Appear in Capital Gains THIS year, but Table A3 NEXT year
 
 ---
 

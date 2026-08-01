@@ -1565,6 +1565,116 @@ class ScheduleFAApp:
                     'Adv Tax by Mar 15 (100%)': adv_tax_mar  # Rounded up
                 })
 
+        # Add future sales (after current FY) for advance tax planning
+        # These sales haven't happened yet but help user plan for next year's advance tax
+        if 'df_sold_future' in locals() and not df_sold_future.empty:
+            for _, row in df_sold_future.iterrows():
+                sale_date = pd.to_datetime(row['Date Sold'])
+                acq_date = pd.to_datetime(row['Date Acquired'])
+
+                qty = int(row['Quantity'])  # G&L file has 'Quantity', not 'Quantity Sold'
+                symbol = row['Symbol']
+                plan_type = row.get('Plan Type', 'Stock')
+
+                # Determine nature prefix
+                if 'RSU' in str(plan_type).upper() or 'RESTRICTED' in str(plan_type).upper():
+                    nature = f"RSU ({qty} shares) - FUTURE"
+                elif 'ESPP' in str(plan_type).upper() or 'EMPLOYEE' in str(plan_type).upper():
+                    nature = f"ESPP ({qty} shares) - FUTURE"
+                else:
+                    nature = f"Stock ({qty} shares) - FUTURE"
+
+                # Calculate holding period
+                holding_months = (sale_date.year - acq_date.year) * 12 + (sale_date.month - acq_date.month)
+
+                # Determine tax type and rate
+                if holding_months > 24:
+                    tax_type = "LTCG"
+                    tax_rate = 0.125
+                else:
+                    tax_type = "STCG"
+                    tax_rate = 0.312
+
+                # Calculate proceeds and cost basis
+                import math
+                proceeds_usd = float(row['Total Proceeds'])
+
+                # Use correct FMV per Section 49(2AA)
+                is_espp = 'ESPP' in str(plan_type).upper() or 'EMPLOYEE' in str(plan_type).upper()
+                if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                    unit_cost_basis = float(row['Purchase Date Fair Mkt. Value'])
+                else:
+                    unit_cost_basis = float(row['Adjusted Cost Basis Per Share'])
+
+                cost_basis_usd = unit_cost_basis * qty
+
+                # Get TTBR for dates
+                sale_date_str = sale_date.strftime('%Y-%m-%d')
+                acq_date_str = acq_date.strftime('%Y-%m-%d')
+
+                # Sale TTBR (may be in future, use latest available)
+                sale_ttbr_df = self.df_sbi[self.df_sbi['Date'] == sale_date_str]
+                if not sale_ttbr_df.empty:
+                    sale_ttbr = sale_ttbr_df['TTBR'].values[0]
+                else:
+                    # Use latest TTBR as estimate for future dates
+                    sale_ttbr = self.df_sbi.sort_values('Date', ascending=False)['TTBR'].values[0] if not self.df_sbi.empty else 89.47
+
+                # Acquisition TTBR
+                acq_ttbr_df = self.df_sbi[self.df_sbi['Date'] == acq_date_str]
+                if not acq_ttbr_df.empty:
+                    acq_ttbr = acq_ttbr_df['TTBR'].values[0]
+                else:
+                    prior_dates = self.df_sbi[self.df_sbi['Date'] < acq_date_str].sort_values('Date', ascending=False)
+                    acq_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+
+                gross_proceeds = math.ceil(proceeds_usd * sale_ttbr)
+                cost_basis = math.ceil(cost_basis_usd * acq_ttbr)
+                capital_gain = gross_proceeds - cost_basis
+                tax_amount = math.ceil(capital_gain * tax_rate)
+
+                # Calculate advance tax schedule for NEXT FY based on sale date
+                # The sale date determines which installment applies
+                sale_month = sale_date.month
+                if sale_month <= 6:
+                    adv_tax_jul = math.ceil(tax_amount * 0.15)
+                    adv_tax_sep = math.ceil(tax_amount * 0.45)
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
+                    adv_tax_mar = tax_amount
+                elif sale_month <= 8:
+                    adv_tax_jul = 0
+                    adv_tax_sep = math.ceil(tax_amount * 0.45)
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
+                    adv_tax_mar = tax_amount
+                elif sale_month <= 11:
+                    adv_tax_jul = 0
+                    adv_tax_sep = 0
+                    adv_tax_dec = math.ceil(tax_amount * 0.75)
+                    adv_tax_mar = tax_amount
+                else:
+                    adv_tax_jul = 0
+                    adv_tax_sep = 0
+                    adv_tax_dec = 0
+                    adv_tax_mar = tax_amount
+
+                capital_gains_data.append({
+                    'Nature': nature,
+                    'Quantity': qty,
+                    'Acquisition Date': acq_date_str,
+                    'Sale Date': sale_date_str,
+                    'Holding Period (months)': holding_months,
+                    'Tax Type': tax_type,
+                    'Cost Basis (INR)': cost_basis,
+                    'Sale Proceeds (INR)': gross_proceeds,
+                    'Capital Gain (INR)': capital_gain,
+                    'Tax Rate': f"{tax_rate*100}%",
+                    'Tax Amount (INR)': tax_amount,
+                    'Adv Tax by Jul 15 (15%)': adv_tax_jul,
+                    'Adv Tax by Sep 15 (45%)': adv_tax_sep,
+                    'Adv Tax by Dec 15 (75%)': adv_tax_dec,
+                    'Adv Tax by Mar 15 (100%)': adv_tax_mar
+                })
+
         # Create two separate tables for Capital Gains sheet
 
         # Table 1: Sale Details (without advance tax columns)
