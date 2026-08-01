@@ -20,9 +20,9 @@ The **Capital Gains** sheet calculates tax liability on stock sales, categorized
 3. This is DIFFERENT from Schedule FA which uses exact dates
 
 **Examples:**
-- Sale on Aug 15, 2025 → Use **Jul 31, 2025** TTBR for BOTH proceeds and cost basis
-- Sale on Nov 1, 2025 → Use **Oct 31, 2025** TTBR for BOTH proceeds and cost basis
-- Sale on Jan 1, 2026 → Use **Dec 31, 2025** TTBR for BOTH proceeds and cost basis
+- Sale on Aug 15 → Use **Jul 31** TTBR for BOTH proceeds and cost basis
+- Sale on Nov 1 → Use **Oct 31** TTBR for BOTH proceeds and cost basis
+- Sale on Jan 1 → Use **Dec 31 (previous year)** TTBR for BOTH proceeds and cost basis
 
 **Why it matters:**
 - Form 16 uses Rule 115(1)(a): Last day of month BEFORE vest month
@@ -51,8 +51,8 @@ RSU/ESPP shares of foreign companies (e.g., AMD) are **unlisted securities** for
 
 **Example:**
 ```
-Acquired: Jan 10, 2024
-Sold: Jan 10, 2026  (exactly 24 months)
+Acquired: Jan 10, Year 1
+Sold: Jan 10, Year 3  (exactly 24 months later)
 Classification: STCG (not "more than" 24 months)
 ```
 
@@ -62,7 +62,7 @@ Classification: STCG (not "more than" 24 months)
 - **Holding Period:** > 24 months
 - **Section:** 112
 - **Tax Rate:** 12.5%
-- **Indexation:** NONE (per Finance Act 2024 for transfers on/after July 23, 2024)
+- **Indexation:** NONE (per Finance Act {YEAR-1} for transfers on/after July 23, {YEAR-1}; check with CA for earlier sales)
 - **NOT applicable:** Section 112A (that's for STT-paid Indian listed equity)
 
 #### Short-Term Capital Gains (STCG)
@@ -130,14 +130,14 @@ For each sale, match against acquisitions using **FIFO (First-In, First-Out)**:
 **Example:**
 ```
 Acquisitions:
-- 2023-06-10: 10 shares (Tranche A)
-- 2024-09-15: 8 shares (Tranche B)
-- 2025-02-20: 6 shares (Tranche C)
+- {DATE}: 10 shares (Tranche A)
+- {DATE}: 8 shares (Tranche B)
+- {DATE}: 6 shares (Tranche C)
 
-Sale: 2025-12-15: 12 shares
+Sale: {DATE}: 12 shares
 FIFO Matching:
-- 10 shares from Tranche A (2023-06-10)
-- 2 shares from Tranche B (2024-09-15)
+- 10 shares from Tranche A ({DATE})
+- 2 shares from Tranche B ({DATE})
 ```
 
 ### Step 3: Calculate Holding Period
@@ -159,9 +159,9 @@ else:
 ```
 
 **Example:**
-- Sale Date: Aug 15, 2025
+- Sale Date: Aug 15, {YEAR}
 - Sale Month: August (8)
-- **Specified Date = Jul 31, 2025** (last day of July)
+- **Specified Date = Jul 31, {YEAR}** (last day of July)
 
 ### Step 5: Calculate Gross Proceeds (INR)
 ```python
@@ -170,10 +170,10 @@ Gross Proceeds (INR) = math.ceil(Quantity × Sale Price (USD) × TTBR on Specifi
 ```
 
 **Example:**
-- Sold: 10 shares on Aug 15, 2025
+- Sold: 10 shares on Aug 15, {YEAR}
 - Sale Price: $200 USD
-- Specified Date: Jul 31, 2025
-- TTBR on Jul 31, 2025: 84.50
+- Specified Date: Jul 31, {YEAR}
+- TTBR on Jul 31, {YEAR}: 84.50
 - **Gross Proceeds = ceil(10 × 200 × 84.50) = ₹1,69,000**
 
 ### Step 6: Calculate Cost Basis (INR)
@@ -183,10 +183,10 @@ Cost Basis (INR) = math.ceil(Quantity × Acquisition Price (USD) × TTBR on Spec
 ```
 
 **Example:**
-- Acquired: 10 shares on 2023-06-10
+- Acquired: 10 shares on {DATE}
 - Acquisition Price: $150 USD
-- **Specified Date: Jul 31, 2025** (SAME as proceeds!)
-- TTBR on Jul 31, 2025: 84.50 (SAME as proceeds!)
+- **Specified Date: Jul 31, {YEAR}** (SAME as proceeds!)
+- TTBR on Jul 31, {YEAR}: 84.50 (SAME as proceeds!)
 - **Cost Basis = ceil(10 × 150 × 84.50) = ₹1,26,750**
 
 **CRITICAL:** Both proceeds and cost basis use the SAME specified date TTBR!
@@ -241,20 +241,18 @@ advance_mar = total_tax  # 100%
 ### Scenario
 **Sale Transaction:**
 - Symbol: AMD
-- Date: 2025-12-01
+- Date: {DATE}
 - Quantity: 12 shares
 - Sale Price: $200 USD
-- TTBR on 2025-12-01: 84.50
+- TTBR on {DATE}: 84.50
 
 **Matched Acquisitions (FIFO):**
-1. **Tranche A:** 10 shares from 2023-06-10
+1. **Tranche A:** 10 shares (acquired 30 months earlier)
    - Acquisition Price: $150 USD
-   - TTBR on 2023-06-10: 82.00
    - Holding: 30 months → **LTCG**
 
-2. **Tranche B:** 2 shares from 2024-09-15
+2. **Tranche B:** 2 shares (acquired 15 months earlier)
    - Acquisition Price: $160 USD
-   - TTBR on 2024-09-15: 83.20
    - Holding: 15 months → **STCG**
 
 ### Calculations
@@ -320,7 +318,7 @@ Plus a summary section with:
 
 **Sales Included:**
 - Only sales from **current FY onwards** are included
-- Example: Generating for FY 2025-26, only sales from Apr 1, 2025 onwards
+- Example: Generating for FY {YEAR}-{YEAR+1}, only sales from Apr 1, {YEAR} onwards
 
 **Sales Excluded:**
 - Sales from previous years (already reported in past ITRs)
@@ -379,7 +377,7 @@ A: Losses are calculated the same way (negative capital gain). Can be set off ag
 **Q: What if holding period is exactly 24 months?**
 A: 24 months = STCG (must be **more than** 24 for LTCG)
 
-**Q: What if I sold in 2024 but generating for FY 2025-26?**
+**Q: What if I sold in {YEAR-1} but generating for FY {YEAR}-{YEAR+1}?**
 A: Those sales are excluded (already reported in previous ITR)
 
 **Q: Can I choose which shares to sell?**

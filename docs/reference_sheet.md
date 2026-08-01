@@ -1,21 +1,21 @@
 # Reference Sheet - Daily Rates
 
 ## Overview
-The Excel file `schedule_fa_2025-26.xlsx` contains a third sheet called **"Reference - Daily Rates"** with complete daily data for the entire year 2025.
+The Excel file `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains a third sheet called **"Reference - Daily Rates"** with complete daily data for the entire year {YEAR}.
 
 ## Sheet Columns
 
 | Column | Description |
 |--------|-------------|
-| **Date** | Every day of 2025 (365 rows) |
+| **Date** | Every day of {YEAR} (365 rows) |
 | **AMD Stock Price (USD)** | Daily closing price of AMD stock |
 | **SBI TTBR Rate (USD to INR)** | State Bank of India TT Buying Rate |
 | **AMD Value per Share (INR)** | Calculated: USD Price × TTBR |
 | **Peak** | Marked with ⭐ PEAK on the highest INR value day |
 
-## Peak AMD Value in 2025
+## Peak AMD Value in {YEAR}
 
-**Date:** October 29, 2025  
+**Date:** {PEAK_DATE}  
 **AMD Price:** USD 264.33  
 **TTBR Rate:** ₹85.97  
 **Peak INR Value:** ₹22,725.50 per share
@@ -31,8 +31,8 @@ This peak value is used to calculate the **"Peak Balance During the Period"** fo
 4. Verify: Initial Value = Quantity × AMD Price (USD) × TTBR
 
 ### Example Verification
-For ESPP Shares (6 shares) acquired on 2024-12-15:
-- Look up 2024-12-15 in Reference sheet
+For ESPP Shares (6 shares) acquired on {DATE}:
+- Look up {DATE} in Reference sheet
 - AMD Price: ~$147.37 USD
 - TTBR: ~83.65
 - Initial Value: 6 × 147.37 × 83.65 = ₹74,421 ✓
@@ -45,7 +45,7 @@ For ESPP Shares (6 shares) acquired on 2024-12-15:
 ## Data Sources
 
 - **AMD Prices:** Live web scraped from Yahoo Finance (249 trading days)
-- **SBI TTBR:** Interpolated based on typical 2025 range (83.50 - 86.49)
+- **SBI TTBR:** Interpolated based on typical {YEAR} range (83.50 - 86.49)
 - **Non-trading days:** Forward-filled from last available trading day
 
 ## Notes

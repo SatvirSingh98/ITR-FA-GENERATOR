@@ -79,10 +79,10 @@ Tax = Capital Gain × (12.5% for LTCG or 31.2% for STCG)
 
 ### Key Dates
 
-**Financial Year 2025-26:**
-- Start: April 1, 2025
-- End: March 31, 2026
-- Assessment Year: 2026-27
+**Financial Year {YEAR}-26:**
+- Start: Apr 1, {FY_START_YEAR}
+- End: Mar 31, {FY_END_YEAR}
+- Assessment Year: {YEAR+1}-27
 
 **Advance Tax Due Dates:**
 - Jul 15: 15% of total tax
@@ -109,7 +109,7 @@ Tax = Capital Gain × (12.5% for LTCG or 31.2% for STCG)
 
 ### Excel Output Sheets
 
-The generated `schedule_fa_2025-26.xlsx` contains:
+The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
 
 1. **Table A2 Custodial Acc** - Account summary (opening, peak, closing)
 2. **Table A3 Equity Interest** - Individual holdings (all tranches)
@@ -183,5 +183,5 @@ For technical questions about the calculations, refer to the specific documentat
 
 ---
 
-**Last Updated:** July 2026  
-**Script Version:** FY 2025-26
+**Last Updated:** July {YEAR+1}  
+**Script Version:** FY {YEAR}-{YEAR+1}

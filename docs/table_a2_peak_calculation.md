@@ -7,13 +7,13 @@ Table A2 in Schedule FA reports the **custodial account summary** with opening b
 
 **Peak Balance** = The highest total value (in INR) of all holdings during the entire financial year (April 1 - March 31).
 
-For FY 2025-26, this means the maximum value between **April 1, 2025 to March 31, 2026**.
+For FY {YEAR}-{YEAR+1}, this means the maximum value between **Apr 1, {FY_START_YEAR} to Mar 31, {FY_END_YEAR}**.
 
 ## How Peak Balance is Calculated
 
 ### Step 1: Daily Valuation Matrix
 For each stock symbol (e.g., AMD), the script:
-1. Gets **daily closing prices** from Yahoo Finance (all trading days in 2025)
+1. Gets **daily closing prices** from Yahoo Finance (all trading days in {YEAR})
 2. Gets **SBI TTBR rates** for those same dates
 3. Creates a matrix: `Date | Stock Price (USD) | TTBR | Value per Share (INR)`
 
@@ -23,8 +23,8 @@ For each symbol:
 Peak Value per Share (INR) = MAX(Stock Price USD × TTBR) across all dates
 ```
 
-**Example for AMD in 2025:**
-- Peak Date: October 29, 2025
+**Example for AMD in {YEAR}:**
+- Peak Date: {PEAK_DATE}
 - AMD Price: $264.33 USD
 - TTBR: ₹85.97
 - **Peak per Share: ₹22,725.50**
@@ -56,7 +56,7 @@ This helps tax authorities understand:
 
 ## Sheet in Excel Output
 
-The **"A2 Peak Calculation"** sheet in `schedule_fa_2025-26.xlsx` shows:
+The **"A2 Peak Calculation"** sheet in `schedule_fa_{YEAR}-{YEAR+1}.xlsx` shows:
 - Date-by-date total portfolio value
 - Which date had the peak
 - Breakdown by tranche
@@ -85,8 +85,8 @@ Each symbol has its own peak date, but we find the single day when the **total p
 
 ### 4. Sold Shares
 Sold shares are **excluded** from peak calculation if sold before the peak date:
-- Sold on June 1, 2025
-- Peak occurred on October 29, 2025
+- Sold on June 1, {YEAR}
+- Peak occurred on {PEAK_DATE}
 - Those shares don't count toward peak (you didn't own them on peak date)
 
 ## Formula Summary
@@ -111,8 +111,8 @@ To verify peak balance:
 
 | Field | Value |
 |-------|-------|
-| Opening Balance (Apr 1, 2025) | ₹4,50,000 |
+| Opening Balance (Apr 1, {YEAR}) | ₹4,50,000 |
 | **Peak Balance During Period** | **₹5,45,412** |
-| Closing Balance (Mar 31, 2026) | ₹5,10,000 |
+| Closing Balance (Mar 31, {YEAR+1}) | ₹5,10,000 |
 
 The peak balance is the key compliance field for Schedule FA!
