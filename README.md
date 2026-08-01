@@ -78,8 +78,11 @@ The tool processes dividend income for COMPLETE ITR-2 filing:
 - **Dividends (Schedule OS) sheet:** Rule 115(1)(e) TTBR for tax calculation
 - Shows the difference side-by-side!
 
-**AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees  
-**See:** [docs/dividends.md](docs/dividends.md) for detailed documentation
+**AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees
+
+**Documentation:**
+- **Schedule FA dividends:** [docs/dividends.md](docs/dividends.md)
+- **Schedule OS & FSI:** [docs/schedule_os_fsi.md](docs/schedule_os_fsi.md)
 
 ## Important Limitations
 

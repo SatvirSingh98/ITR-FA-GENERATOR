@@ -356,6 +356,7 @@ class ScheduleFAApp:
         total_tax_paid_usd = 0
         total_tax_paid_inr = 0
 
+        # Build FSI summary section (only 2 columns)
         fsi_data = {
             'Indian Financial Year': [
                 'Assessment Year',
@@ -364,10 +365,7 @@ class ScheduleFAApp:
                 'Total Foreign Source Income',
                 'Total Tax Paid Outside India',
                 'Total Tax Relief Available (Schedule TR)',
-                '',
-                'Country',
-                '',
-                'WARNINGS / NOTES'
+                ''
             ],
             self.indian_fy: [
                 self.assessment_year,
@@ -376,34 +374,14 @@ class ScheduleFAApp:
                 total_foreign_income,
                 total_tax_paid_inr,
                 0,  # Tax relief calculated later
-                '',
-                'Country Code',
-                '',
                 ''
-            ],
-            'Unnamed: 2': [''] * 10,
-            'Unnamed: 3': [''] * 10,
-            'Unnamed: 4': [''] * 10,
-            'Unnamed: 5': [''] * 10,
-            'Unnamed: 6': [''] * 10,
-            'Unnamed: 7': [''] * 10,
-            'Unnamed: 8': [''] * 10,
-            'Unnamed: 9': [''] * 10
+            ]
         }
 
-        # Fill in header row for country details
-        fsi_data['Unnamed: 2'][7] = 'TIN / Passport No.'
-        fsi_data['Unnamed: 3'][7] = 'DTAA Article'
-        fsi_data['Unnamed: 4'][7] = 'Dividend Income (USD)'
-        fsi_data['Unnamed: 5'][7] = 'Dividend Income (INR Rs.)'
-        fsi_data['Unnamed: 6'][7] = 'Capital Gains Income (INR Rs.)'
-        fsi_data['Unnamed: 7'][7] = 'Tax Paid (USD)'
-        fsi_data['Unnamed: 8'][7] = 'Tax Paid (INR Rs.)'
-        fsi_data['Unnamed: 9'][7] = 'Tax Relief Available (INR Rs.)'
-
-        # Add warning notes
+        # Add warning notes if applicable
         if total_div_inr == 0 and total_cg_inr == 0:
-            fsi_data['Indian Financial Year'][9] = f"• No dividend, NRA withholding, or capital-gains activity found in Indian FY {self.indian_fy} (Apr-Mar)"
+            fsi_data['Indian Financial Year'].append('WARNINGS / NOTES')
+            fsi_data[self.indian_fy].append(f"• No dividend, NRA withholding, or capital-gains activity found in Indian FY {self.indian_fy} (Apr-Mar)")
 
         df_schedule_fsi = pd.DataFrame(fsi_data)
 
