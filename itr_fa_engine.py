@@ -63,11 +63,11 @@ def load_config(config_file="config.json"):
 class ScheduleFAApp:
     @staticmethod
     def clean_text_for_itr(text):
-        """Remove commas, periods, asterisks, and other special characters that ITR portal doesn't accept."""
+        """Remove commas (ITR portal doesn't accept commas). Keep periods and asterisks."""
         if not text or not isinstance(text, str):
             return text
-        # Remove commas, periods, and asterisks
-        text = text.replace(',', '').replace('.', '').replace('*', '')
+        # Remove only commas - periods and asterisks are allowed
+        text = text.replace(',', '')
         # Remove other problematic characters if needed
         return text.strip()
 
