@@ -824,39 +824,44 @@ class ScheduleFAApp:
                 df_sold_all['Date Acquired'] = pd.to_datetime(df_sold_all['Date Acquired'])
                 df_sold_all['Date Sold'] = pd.to_datetime(df_sold_all['Date Sold'])
 
-                # Split into two categories:
-                # Category 1: Actually sold in THIS FY (cg_start_date <= sold <= cg_end_date)
-                # IMPORTANT: Use extended CG date range (Jan 1 - Mar 31 next year) per ITRFA.in
+                # CRITICAL DISTINCTION:
+                # - Table A3 (Schedule FA) uses CALENDAR YEAR (Jan 1 - Dec 31)
+                # - Capital Gains (Schedule CG) uses EXTENDED PERIOD (Jan 1 - Mar 31 next year)
+                # These are TWO DIFFERENT things per ITRFA.in guidance!
+
+                # === FOR TABLE A3 (Calendar Year: Jan 1 - Dec 31) ===
+                # Category 1: Sold within CALENDAR YEAR (for Table A3 disclosure)
+                df_sold_calendar = df_sold_all[
+                    (df_sold_all['Date Acquired'] <= self.end_date) &
+                    (df_sold_all['Date Sold'] >= self.start_date) &
+                    (df_sold_all['Date Sold'] <= self.end_date)
+                ].copy()
+
+                # Category 2: Held in CALENDAR YEAR but sold AFTER calendar year ends
+                df_sold_future = df_sold_all[
+                    (df_sold_all['Date Acquired'] <= self.end_date) &
+                    (df_sold_all['Date Sold'] > self.end_date)
+                ].copy()
+
+                # Category 3: Sales BEFORE this calendar year (excluded from A3 for tracking)
+                df_sold_before_fy = df_sold_all[
+                    (df_sold_all['Date Sold'] < pd.to_datetime(self.start_date))
+                ].copy()
+
+                # Use calendar year sales for Table A3
+                df_sold = df_sold_calendar
+
+                # === FOR CAPITAL GAINS SHEET (Extended: Jan 1 - Mar 31 next year) ===
                 # This captures sales from Jan-Mar next calendar year that fall in same Indian FY
-                df_sold_in_fy = df_sold_all[
+                df_sold_cg = df_sold_all[
                     (df_sold_all['Date Acquired'] <= self.cg_end_date) &
                     (df_sold_all['Date Sold'] >= self.cg_start_date) &
                     (df_sold_all['Date Sold'] <= self.cg_end_date)
                 ].copy()
 
-                # Category 2: Held in THIS FY but sold AFTER FY ends
-                # These are for advance tax planning (sold in future years)
-                # IMPORTANT: Only include future sales, not old sales from before this FY
-                df_sold_future = df_sold_all[
-                    (df_sold_all['Date Acquired'] <= self.cg_end_date) &
-                    (df_sold_all['Date Sold'] > self.cg_end_date)
-                ].copy()
-
-                # Exclude any sales that happened BEFORE this FY started (old/historical sales)
-                # Example: For FY 2025, exclude sales from 2024, 2023, etc.
-                df_sold_in_fy = df_sold_in_fy[df_sold_in_fy['Date Sold'] >= self.cg_start_date]
-
-                # For now, we'll process Category 1 (actually sold in FY)
-                df_sold = df_sold_in_fy
-
-                # Category 3: Sales BEFORE this CG period (excluded from A3 for tracking)
-                # These are shares that were sold before the CG period and should NOT appear in A3
-                df_sold_before_fy = df_sold_all[
-                    (df_sold_all['Date Sold'] < pd.to_datetime(self.cg_start_date))
-                ].copy()
-
-                print(f"[OK] Found {len(df_sold_in_fy)} sales WITHIN FY {self.indian_fy}")
-                print(f"[OK] Found {len(df_sold_future)} holdings that will be sold AFTER FY {self.indian_fy}")
+                print(f"[OK] Table A3: {len(df_sold_calendar)} sales in calendar year {self.calendar_year}")
+                print(f"[OK] Capital Gains: {len(df_sold_cg)} sales in extended period (Jan {self.calendar_year} - Mar {self.calendar_year + 1})")
+                print(f"[OK] Found {len(df_sold_future)} holdings that will be sold AFTER {self.cg_end_date}")
 
                 excluded = len(df_sold_before_fy)
                 if excluded > 0:
@@ -921,16 +926,27 @@ class ScheduleFAApp:
             symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
             comp_info = self.get_company_details(symbol)
 
-            # Determine if it's RSU or ESPP based on cost basis
-            # ESPP typically has lower cost basis due to discount, but safest is to check G&L file
-            # For now, assume sold shares are RSU (most common for equity awards)
-            nature = f"RSU ({qty} share) Sold" if qty == 1 else f"RSU ({qty} shares) Sold"
+            # Determine if it's RSU or ESPP based on Plan Type column
+            plan_type = str(row.get('Plan Type', ''))
+            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
+
+            nature = f"ESPP ({qty} shares) Sold" if is_espp else f"RSU ({qty} shares) Sold"
+            if qty == 1:
+                nature = f"ESPP ({qty} share) Sold" if is_espp else f"RSU ({qty} share) Sold"
+
             acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
             sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
 
-            # Use Adjusted Cost Basis Per Share for initial value
-            # This represents the FMV on vesting/acquisition date and is used for tax purposes
-            unit_cost = float(row['Adjusted Cost Basis Per Share'])
+            # CRITICAL: Use correct FMV per Section 49(2AA) of Income Tax Act
+            # - RSU: "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
+            # - ESPP: Must use "Purchase Date Fair Mkt. Value" (NOT "Adjusted Cost Basis" which is discounted price!)
+            # Per ITRFA.in: "If employer taxed the discount, Indian cost = FMV on purchase date"
+            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                unit_cost = float(row['Purchase Date Fair Mkt. Value'])  # FMV on purchase date (correct for ESPP)
+            else:
+                # For RSU: Adjusted Cost Basis = FMV at vest (correct)
+                # Note: Don't use "Vest Date FMV" column - it's sometimes corrupted with datetime values
+                unit_cost = float(row['Adjusted Cost Basis Per Share'])
 
             proceeds_usd = float(row['Total Proceeds'])
 
@@ -969,13 +985,22 @@ class ScheduleFAApp:
 
             # Determine plan type from G&L
             plan_type = str(row.get('Plan Type', ''))
-            nature_prefix = "ESPP" if "ESPP" in plan_type else "RSU"
+            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
+            nature_prefix = "ESPP" if is_espp else "RSU"
             nature = f"{nature_prefix} ({qty} shares) - Sold" if qty != 1 else f"{nature_prefix} ({qty} share) - Sold"
 
             acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
             sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
+
+            # CRITICAL: Use correct FMV per Section 49(2AA)
+            # - RSU: "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
+            # - ESPP: Must use "Purchase Date Fair Mkt. Value" (NOT "Adjusted Cost Basis"!)
+            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                unit_cost = float(row['Purchase Date Fair Mkt. Value'])  # FMV on purchase date (correct for ESPP)
+            else:
+                # For RSU: Adjusted Cost Basis = FMV at vest (correct)
+                unit_cost = float(row['Adjusted Cost Basis Per Share'])
             # NOTE: We do NOT pass sell_date to calculate_tranche_values because we want closing balance on Dec 31, not 0
-            unit_cost = float(row['Adjusted Cost Basis Per Share'])
 
             # Calculate sale proceeds in INR (for Capital Gains sheet)
             proceeds_usd = float(row['Total Proceeds'])
@@ -1414,7 +1439,7 @@ class ScheduleFAApp:
         df_a2_peak['PEAK SUMMARY'] = summary_labels
         df_a2_peak['Value'] = summary_values
 
-        # Create Capital Gains sheet (for stocks sold WITHIN this FY)
+        # Create Capital Gains sheet using EXTENDED PERIOD (Jan 1 - Mar 31 next year)
         # This calculates advance tax obligations based on sale date
         # Advance Tax Schedule (Income Tax Rule 234C):
         #   - By July 15: 15% of tax
@@ -1423,21 +1448,25 @@ class ScheduleFAApp:
         #   - By Mar 15: 100% of tax (cumulative)
         capital_gains_data = []
 
-        for tranche in equity_tranches:
-            # Include sales from THIS FY onwards (exclude old sales from previous years)
-            # This includes: 1) Sales in current FY, 2) Future sales (for advance tax planning)
-            if tranche.get('_SaleDate') and tranche.get('_GrossProceeds'):
-                sale_date = pd.to_datetime(tranche.get('_SaleDate', ''))
+        # Build Capital Gains from df_sold_cg (extended period) instead of equity_tranches (calendar year)
+        # This ensures we capture sales from Jan-Mar next year that are in same Indian FY
+        if 'df_sold_cg' in locals() and not df_sold_cg.empty:
+            for _, row in df_sold_cg.iterrows():
+                sale_date = pd.to_datetime(row['Date Sold'])
+                acq_date = pd.to_datetime(row['Date Acquired'])
 
-                # FILTER: Only include sales within the CG period (Jan 1 - Mar 31 next year)
-                # Example: For AY 2026-27, include sales from 2025-01-01 to 2026-03-31
-                if sale_date < pd.to_datetime(self.cg_start_date):
-                    continue  # Skip old sales from previous years
+                # Extract quantity and nature
+                qty = int(row['Quantity Sold'])
+                symbol = row['Symbol']
+                plan_type = row.get('Plan Type', 'Stock')
 
-                # Extract quantity from NatureOfEntity (e.g., "RSU (26 shares) Sold" -> 26)
-                qty_str = tranche['NatureOfEntity'].split('(')[1].split(' ')[0] if '(' in tranche['NatureOfEntity'] else ''
-
-                acq_date = pd.to_datetime(tranche['InterestAcquiringDate'])
+                # Determine nature prefix
+                if 'RSU' in str(plan_type).upper() or 'RESTRICTED' in str(plan_type).upper():
+                    nature = f"RSU ({qty} shares)"
+                elif 'ESPP' in str(plan_type).upper() or 'EMPLOYEE' in str(plan_type).upper():
+                    nature = f"ESPP ({qty} shares)"
+                else:
+                    nature = f"Stock ({qty} shares)"
 
                 # Calculate holding period in months
                 holding_months = (sale_date.year - acq_date.year) * 12 + (sale_date.month - acq_date.month)
@@ -1452,10 +1481,46 @@ class ScheduleFAApp:
                     tax_type = "STCG"
                     tax_rate = 0.312  # 31.2%
 
-                # Use _GrossProceeds (from G&L) for ALL sales (not TotGrossProceeds which is 0 for future sales)
+                # Calculate proceeds and cost basis in INR
                 import math
-                gross_proceeds = math.ceil(tranche['_GrossProceeds'])  # Round UP proceeds
-                cost_basis = math.ceil(tranche['InitialValOfInvstmnt'])  # Round UP cost basis
+                proceeds_usd = float(row['Total Proceeds'])
+
+                # CRITICAL: Use correct FMV per Section 49(2AA) for cost basis
+                # - RSU: "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
+                # - ESPP: Must use "Purchase Date Fair Mkt. Value" (NOT "Adjusted Cost Basis"!)
+                is_espp = 'ESPP' in str(plan_type).upper() or 'EMPLOYEE' in str(plan_type).upper()
+                if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                    unit_cost_basis = float(row['Purchase Date Fair Mkt. Value'])  # FMV on purchase date (correct for ESPP)
+                else:
+                    # For RSU: Adjusted Cost Basis = FMV at vest (correct)
+                    unit_cost_basis = float(row['Adjusted Cost Basis Per Share'])
+
+                cost_basis_usd = unit_cost_basis * qty
+
+                # Get TTBR from SBI data (with forward-fill for holidays)
+                sale_date_str = sale_date.strftime('%Y-%m-%d')
+                acq_date_str = acq_date.strftime('%Y-%m-%d')
+
+                # Get TTBR for sale date
+                sale_ttbr_df = self.df_sbi[self.df_sbi['Date'] == sale_date_str]
+                if not sale_ttbr_df.empty:
+                    sale_ttbr = sale_ttbr_df['TTBR'].values[0]
+                else:
+                    # Forward-fill: use previous available rate
+                    prior_dates = self.df_sbi[self.df_sbi['Date'] < sale_date_str].sort_values('Date', ascending=False)
+                    sale_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+
+                # Get TTBR for acquisition date
+                acq_ttbr_df = self.df_sbi[self.df_sbi['Date'] == acq_date_str]
+                if not acq_ttbr_df.empty:
+                    acq_ttbr = acq_ttbr_df['TTBR'].values[0]
+                else:
+                    # Forward-fill: use previous available rate
+                    prior_dates = self.df_sbi[self.df_sbi['Date'] < acq_date_str].sort_values('Date', ascending=False)
+                    acq_ttbr = prior_dates['TTBR'].values[0] if not prior_dates.empty else 85.0
+
+                gross_proceeds = math.ceil(proceeds_usd * sale_ttbr)  # Round UP proceeds
+                cost_basis = math.ceil(cost_basis_usd * acq_ttbr)  # Round UP cost basis
                 capital_gain = gross_proceeds - cost_basis  # Already rounded up
                 tax_amount = math.ceil(capital_gain * tax_rate)  # Round UP tax
 
@@ -1483,10 +1548,10 @@ class ScheduleFAApp:
                     adv_tax_mar = tax_amount
 
                 capital_gains_data.append({
-                    'Nature': tranche['NatureOfEntity'].replace(' Sold', '').replace(' - Sold', ''),
-                    'Quantity': int(qty_str) if qty_str else 0,
-                    'Acquisition Date': tranche['InterestAcquiringDate'],
-                    'Sale Date': tranche.get('_SaleDate', ''),
+                    'Nature': nature,
+                    'Quantity': qty,
+                    'Acquisition Date': acq_date_str,
+                    'Sale Date': sale_date_str,
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
                     'Cost Basis (INR)': cost_basis,  # Rounded up
