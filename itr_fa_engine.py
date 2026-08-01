@@ -2455,6 +2455,74 @@ class ScheduleFAApp:
                                     # Account Value (INR), Peak INR Value, A2 Peak Balance (INR)
                                     value_cell.number_format = '"Rs."#,##0.00'
 
+                # Special formatting for Schedule OS and FSI sheets
+                if sheet_name in ["Schedule OS", "Schedule FSI"]:
+                    # These sheets have a different layout - first column is labels, second column is data
+                    # First row should have header formatting
+                    for cell in ws[1]:
+                        if cell.value:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            cell.border = border_thin
+
+                    # Format label column (Column A) - bold
+                    label_font = Font(bold=True, size=10)
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws.cell(row=row_idx, column=1)  # Column A
+                        if cell.value:
+                            cell.font = label_font
+                            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+                    # Format data column (Column B) - numbers with proper formatting
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws.cell(row=row_idx, column=2)  # Column B (indian_fy column)
+                        if cell.value and isinstance(cell.value, (int, float)):
+                            # Check the label in column A to determine format
+                            label_cell = ws.cell(row=row_idx, column=1)
+                            label = str(label_cell.value) if label_cell.value else ""
+
+                            if 'USD' in label:
+                                cell.number_format = '$#,##0.00'
+                            elif 'INR' in label or 'Income' in label or 'Tax' in label or 'Relief' in label:
+                                cell.number_format = '"Rs."#,##0'
+                            else:
+                                cell.number_format = '#,##0'
+
+                    # For Schedule FSI, format the country details table (rows with headers in row with "Country")
+                    if sheet_name == "Schedule FSI":
+                        # Find the row with country details header
+                        for row_idx in range(1, ws.max_row + 1):
+                            cell = ws.cell(row=row_idx, column=1)
+                            if cell.value == "Country":
+                                # This is the header row for country details table
+                                for col_idx in range(1, ws.max_column + 1):
+                                    header_cell = ws.cell(row=row_idx, column=col_idx)
+                                    if header_cell.value:
+                                        header_cell.fill = header_fill
+                                        header_cell.font = header_font
+                                        header_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                                        header_cell.border = border_thin
+                                break
+
+                    # Format warnings/notes section (usually at the bottom)
+                    warning_font = Font(italic=True, size=9, color="FF0000")
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws.cell(row=row_idx, column=1)
+                        if cell.value and 'WARNING' in str(cell.value).upper():
+                            cell.font = Font(bold=True, size=10)
+                        # Format warning text rows
+                        cell = ws.cell(row=row_idx, column=2)
+                        if cell.value and isinstance(cell.value, str) and cell.value.startswith('•'):
+                            cell.font = warning_font
+                            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+                    # Auto-adjust column widths for Schedule OS and FSI
+                    ws.column_dimensions['A'].width = 45  # Label column
+                    ws.column_dimensions['B'].width = 25  # Data column
+                    for col_idx in range(3, ws.max_column + 1):
+                        ws.column_dimensions[get_column_letter(col_idx)].width = 18
+
                 # Special formatting for Capital Gains sheet
                 if sheet_name == "Capital Gains":
                     # Table 2 header and data (bold + colored)
