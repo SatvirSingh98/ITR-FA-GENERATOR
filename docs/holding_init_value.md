@@ -44,14 +44,15 @@ Example (for target year {YEAR}):
 
 Acquisitions before **January 1 of target year** need special handling.
 
-### Step 2: Download Historical TTBR
-The script calls `_fetch_sbi_rates_web()` with `extra_dates`:
+### Step 2: Load Historical TTBR
+The script identifies exact acquisition dates:
 ```python
 extra_dates = ['{YEAR-1}-07-20', '{YEAR-1}-12-15']
-# Plus ±3 day buffer: ['{YEAR-1}-07-17', '{YEAR-1}-07-18', ..., '{YEAR-1}-07-23']
 ```
 
-This fetches TTBR for those specific dates from historical GitHub data.
+These dates are loaded from the historical SBI TTBR CSV (which already contains all historical data back to 2020).
+
+**No buffer needed:** If the exact date is a weekend/holiday, the lookup automatically searches backward to find the most recent preceding trading day.
 
 ### Step 3: Download Historical Stock Prices
 For each pre-{YEAR} acquisition date:
@@ -82,26 +83,29 @@ initial_value_inr = math.ceil(initial_value_inr)
 
 All values rounded UP for tax compliance.
 
-## Why ±3 Day Buffer?
+## How Weekend/Holiday Dates Are Handled
 
 ### The Weekend Problem:
 If acquisition date falls on a weekend or holiday:
 - **Stock market:** Closed (no price)
 - **Indian banks:** Closed (no TTBR)
 
-### Solution: Forward-Fill Logic
+### Solution: Automatic Backward Search
 ```
 Acquisition Date: {YEAR-1}-12-14 (Saturday - market closed)
-Buffer dates: {YEAR-1}-12-11, 12-12, 12-13, 12-14, 12-15, 12-16, 12-17
 
-Use last available trading day before 12-14:
-- {YEAR-1}-12-13 (Friday): ✓ Market open, TTBR available
+Lookup process:
+1. Try exact date: {YEAR-1}-12-14 → Not found (weekend)
+2. Search backward: Find most recent date BEFORE 12-14
+3. Use {YEAR-1}-12-13 (Friday): ✓ TTBR available
 ```
 
-The script:
-1. Downloads TTBR for a **range** around the acquisition date
-2. Forward-fills to cover weekends/holidays
-3. Uses the **closest prior trading day** if exact date unavailable
+**Per tax law:** Use the **nearest PRECEDING** trading day (not after).
+
+The script automatically:
+1. Tries exact acquisition date first
+2. If not found, searches backward through the CSV
+3. Uses the most recent available rate before that date
 
 ## Excel Sheet Output
 
@@ -162,9 +166,11 @@ Initial Value = ceil(8 × 180.00 × 84.20) = ₹1,21,248
 
 When the script detects pre-{YEAR} holdings:
 ```
-[*] Found acquisition dates before calendar year {YEAR}, downloading TTBR with ±3 day buffer for weekends
+[*] Found acquisition dates before calendar year {YEAR}, loading historical TTBR
+[*] Dates needed: {YEAR-1}-05-09, {YEAR-1}-09-15, {YEAR-1}-11-08
+[OK] Loaded 1609 records from local CSV
 [OK] Downloaded 278 SBI TTBR records for {YEAR}
-[OK] Plus 8 specific dates before {YEAR}: {YEAR-1}-07-17, {YEAR-1}-07-18, ..., {YEAR-1}-12-18
+[OK] Plus 3 specific dates: {YEAR-1}-05-09, {YEAR-1}-09-15, {YEAR-1}-11-08
 [OK] TTBR range: 82.50 to 86.49
 ```
 
@@ -183,9 +189,10 @@ https://github.com/sahilgupta/sbi-fx-ratekeeper
 This has historical data going back to 2020, so acquisitions from 2020-{YEAR-1} are covered.
 
 ### 2. What if Acquisition Date has No TTBR?
-If the exact date is missing:
-- The ±3 day buffer usually covers it (finds nearest trading day)
-- If still missing, script will error out
+If the exact date is missing (weekend/holiday):
+- Script automatically searches backward to find nearest preceding trading day
+- Uses that rate per tax law (nearest preceding working day)
+- If still missing (very old date before 2020), script will error out
 - **Manual fix:** Add that date's TTBR to `data/SBI_FOREX_CARD_RATES_USD.csv`
 
 ### 3. Stock Price Source: Yahoo Finance
@@ -236,8 +243,8 @@ A:
 2. If still missing, manually add that date's TTBR to the CSV
 3. Re-run the script
 
-**Q: Why ±3 days instead of ±1?**
-A: Handles long weekends and holiday clusters (e.g., Diwali + weekend = 4-5 days off)
+**Q: Why not search forward (after the acquisition date)?**
+A: Tax law requires using the nearest PRECEDING working day, not after. The backward search ensures compliance.
 
 **Q: Does this affect capital gains calculation?**
 A: No! Capital Gains uses Rule 115(1)(f) - a different exchange rate rule (last day of month before sale). This sheet is only for Schedule FA Table A3 initial value.
@@ -256,15 +263,16 @@ A: No! Capital Gains uses Rule 115(1)(f) - a different exchange rate rule (last 
 2. [OK] Discovered 2 tranches, 2 are pre-{YEAR}
 3. [*] Downloading SBI TTBR for {YEAR}...
 4. [OK] Downloaded 278 records
-5. [*] Found acquisition dates before calendar year {YEAR}, downloading historical TTBR...
-6. [OK] Plus 8 specific dates: {YEAR-1}-07-17 to {YEAR-1}-07-23, {YEAR-1}-12-12 to {YEAR-1}-12-18
-7. [*] Scraping Yahoo Finance for AMD...
-8. [OK] Got prices for all dates including historical
-9. [*] Calculating initial values...
-10. [OK] Pre-{YEAR} Holdings:
+5. [*] Found acquisition dates before calendar year {YEAR}, loading historical TTBR
+6. [*] Dates needed: {YEAR-1}-07-20, {YEAR-1}-12-15
+7. [OK] Plus 2 specific dates: {YEAR-1}-07-20, {YEAR-1}-12-15
+8. [*] Scraping Yahoo Finance for AMD...
+9. [OK] Got prices for all dates including historical
+10. [*] Calculating initial values...
+11. [OK] Pre-{YEAR} Holdings:
     - {YEAR-1}-07-20: 10 shares, $147.50, TTBR 83.25 → ₹1,22,794
     - {YEAR-1}-12-15: 6 shares, $152.30, TTBR 83.65 → ₹76,465
-11. [OK] Saved to "Pre-{YEAR} Holdings Init Val" sheet
+12. [OK] Saved to "Pre-{YEAR} Holdings Init Val" sheet
 ```
 
 **Output in Excel:**

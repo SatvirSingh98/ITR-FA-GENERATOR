@@ -173,20 +173,25 @@ class ScheduleFAApp:
         # Filter for target year only (for peak/closing calculations)
         df_year = df[(df['Date'] >= self.start_date) & (df['Date'] <= self.end_date)]
 
-        # Add specific pre-FY dates for initial value calculations (if provided)
+        # Add historical data for pre-calendar-year dates (if requested)
         if extra_dates:
+            # Return ALL historical data from CSV (not just requested dates)
+            # This allows automatic backward search to find preceding trading days
+            # Filter: Include target year + all dates before target year
+            df_with_history = df[df['Date'] <= self.end_date]
+
+            # Verify requested dates exist (for logging)
             df_extra = df[df['Date'].isin(extra_dates)]
-            df_combined = pd.concat([df_year, df_extra]).drop_duplicates(subset=['Date']).sort_values('Date')
+            found_dates = df_extra['Date'].tolist()
+            missing_dates = [d for d in extra_dates if d not in found_dates]
 
-            if len(df_extra) > 0:
-                print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
-                print(f"[OK] Plus {len(df_extra)} specific dates before FY: {', '.join(sorted(extra_dates))}")
-            else:
-                print(f"[!] WARNING: Could not find TTBR for pre-FY dates: {', '.join(sorted(extra_dates))}")
-                print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
+            if missing_dates:
+                print(f"[!] WARNING: Could not find exact TTBR for dates (will use backward search): {', '.join(sorted(missing_dates))}")
 
-            print(f"[OK] TTBR range: {df_combined['TTBR'].min():.2f} to {df_combined['TTBR'].max():.2f}")
-            return df_combined[['Date', 'TTBR']]
+            print(f"[OK] Downloaded {len(df_year)} SBI TTBR records for {self.calendar_year}")
+            print(f"[OK] Plus {len(df_with_history) - len(df_year)} historical records for backward search")
+            print(f"[OK] TTBR range: {df_with_history['TTBR'].min():.2f} to {df_with_history['TTBR'].max():.2f}")
+            return df_with_history[['Date', 'TTBR']]
         else:
             if df_year.empty:
                 print(f"[!] WARNING: No SBI TTBR data for {self.calendar_year}")
@@ -734,7 +739,7 @@ class ScheduleFAApp:
 
         extra_dates = []
 
-        # Scan ByStatus for pre-FY acquisitions
+        # Scan ByStatus for pre-calendar-year acquisitions
         try:
             df_bystatus = pd.read_excel(bystatus_path, sheet_name='Sellable')
             for _, row in df_bystatus.iterrows():
@@ -743,14 +748,12 @@ class ScheduleFAApp:
                     if pd.notna(acq_date_raw):
                         acq_date = pd.to_datetime(acq_date_raw)
                         if acq_date.strftime('%Y-%m-%d') < self.start_date:
-                            # Add the date and surrounding dates (for weekends/holidays)
-                            for offset in range(-3, 4):  # 3 days before/after
-                                date_with_offset = (acq_date + pd.Timedelta(days=offset)).strftime('%Y-%m-%d')
-                                extra_dates.append(date_with_offset)
+                            # Add only exact date - CSV lookup will search backward if weekend/holiday
+                            extra_dates.append(acq_date.strftime('%Y-%m-%d'))
         except Exception as e:
-            print(f"[!] Could not scan ByStatus for pre-FY dates: {e}")
+            print(f"[!] Could not scan ByStatus for pre-calendar-year dates: {e}")
 
-        # Scan G&L for pre-FY acquisitions
+        # Scan G&L for pre-calendar-year acquisitions
         if gl_path and os.path.exists(gl_path):
             try:
                 df_gl = pd.read_excel(gl_path, sheet_name='G&L_Expanded')
@@ -760,19 +763,16 @@ class ScheduleFAApp:
                     if pd.notna(acq_date_raw):
                         acq_date = pd.to_datetime(acq_date_raw)
                         if acq_date.strftime('%Y-%m-%d') < self.start_date:
-                            # Add the date and surrounding dates (for weekends/holidays)
-                            for offset in range(-3, 4):  # 3 days before/after
-                                date_with_offset = (acq_date + pd.Timedelta(days=offset)).strftime('%Y-%m-%d')
-                                extra_dates.append(date_with_offset)
+                            # Add only exact date - CSV lookup will search backward if weekend/holiday
+                            extra_dates.append(acq_date.strftime('%Y-%m-%d'))
             except Exception as e:
-                print(f"[!] Could not scan G&L for pre-FY dates: {e}")
+                print(f"[!] Could not scan G&L for pre-calendar-year dates: {e}")
 
-        # If we found pre-FY dates, reload TTBR with them
+        # If we found pre-calendar-year dates, reload TTBR with them
         if extra_dates:
             unique_extra = sorted(set(extra_dates))
-            # Show only the core dates, not all surrounding dates
-            core_dates = sorted(set([d for d in extra_dates[::7]]))  # Sample to show main dates
-            print(f"[*] Found acquisition dates before FY {self.calendar_year}, downloading TTBR with ±3 day buffer for weekends")
+            print(f"[*] Found acquisition dates before calendar year {self.calendar_year}, loading historical TTBR")
+            print(f"[*] Dates needed: {', '.join(unique_extra)}")
             self.df_sbi = self._fetch_sbi_rates_web(extra_dates=unique_extra)
             self._extra_ttbr_dates_loaded = True
 
