@@ -203,6 +203,138 @@ class ScheduleFAApp:
             print(f"[OK] TTBR range: {df_year['TTBR'].min():.2f} to {df_year['TTBR'].max():.2f}")
             return df_year[['Date', 'TTBR']]
 
+    def _parse_dividend_data(self, transaction_history_path=None):
+        """
+        Parse dividend transactions from E*TRADE Transaction History CSV.
+
+        Returns: DataFrame with columns: Symbol, Date, Amount (USD), TTBR, Amount (INR)
+        Returns empty DataFrame if file not found (dividends are optional).
+        """
+        if not transaction_history_path or not os.path.exists(transaction_history_path):
+            print(f"[i] Transaction History file not found - skipping dividend processing")
+            return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+        try:
+            # Read Transaction History CSV
+            df_trans = pd.read_csv(transaction_history_path)
+            print(f"[*] Reading dividend data from {transaction_history_path}")
+
+            # Filter for dividend transactions
+            # E*TRADE typically uses "Dividend" or "Cash Dividend" in TransactionType or Description
+            dividend_mask = (
+                (df_trans.get('TransactionType', pd.Series()).str.contains('Dividend', case=False, na=False)) |
+                (df_trans.get('Description', pd.Series()).str.contains('Dividend', case=False, na=False)) |
+                (df_trans.get('Type', pd.Series()).str.contains('Dividend', case=False, na=False))
+            )
+
+            df_dividends = df_trans[dividend_mask].copy()
+
+            if df_dividends.empty:
+                print(f"[i] No dividend transactions found in Transaction History")
+                return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+            # Extract relevant columns (handle various E*TRADE CSV formats)
+            # Common column names: TransactionDate, Date, SettlementDate, PostedDate
+            date_col = None
+            for col in ['TransactionDate', 'Date', 'SettlementDate', 'PostedDate']:
+                if col in df_dividends.columns:
+                    date_col = col
+                    break
+
+            if not date_col:
+                print(f"[!] Warning: Could not find date column in Transaction History")
+                return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+            # Amount column (usually 'Amount', 'NetAmount', or 'Quantity')
+            amount_col = None
+            for col in ['Amount', 'NetAmount', 'Quantity', 'Credit']:
+                if col in df_dividends.columns:
+                    amount_col = col
+                    break
+
+            if not amount_col:
+                print(f"[!] Warning: Could not find amount column in Transaction History")
+                return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+            # Symbol column
+            symbol_col = None
+            for col in ['Symbol', 'SecuritySymbol', 'Ticker']:
+                if col in df_dividends.columns:
+                    symbol_col = col
+                    break
+
+            if not symbol_col:
+                print(f"[!] Warning: Could not find symbol column in Transaction History")
+                return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+            # Parse dates
+            df_dividends['Date'] = pd.to_datetime(df_dividends[date_col])
+
+            # Filter to calendar year only
+            df_dividends = df_dividends[
+                (df_dividends['Date'] >= self.start_date) &
+                (df_dividends['Date'] <= self.end_date)
+            ].copy()
+
+            if df_dividends.empty:
+                print(f"[i] No dividends found in calendar year {self.calendar_year}")
+                return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+            # Extract amounts (handle negative values - dividend credits are positive)
+            df_dividends['Amount (USD)'] = df_dividends[amount_col].abs()
+            df_dividends['Symbol'] = df_dividends[symbol_col]
+
+            # Get TTBR for each dividend date (exact credit date per CBDT Schedule FA instructions)
+            dividend_list = []
+            for _, row in df_dividends.iterrows():
+                div_date = row['Date'].strftime('%Y-%m-%d')
+                symbol = row['Symbol']
+                amount_usd = row['Amount (USD)']
+
+                # Get TTBR for exact dividend credit date
+                ttbr_row = self.df_sbi[self.df_sbi['Date'] == div_date]
+
+                if not ttbr_row.empty:
+                    ttbr = ttbr_row['TTBR'].values[0]
+                else:
+                    # Dividend date not found (weekend/holiday) - use nearest preceding working day
+                    sbi_before = self.df_sbi[self.df_sbi['Date'] < div_date]
+                    if not sbi_before.empty:
+                        closest_date = sbi_before['Date'].max()
+                        ttbr = sbi_before[sbi_before['Date'] == closest_date]['TTBR'].values[0]
+                        print(f"[i] Dividend {div_date} is weekend/holiday, using previous trading day {closest_date} TTBR: {ttbr:.2f}")
+                    else:
+                        print(f"[!] Warning: No TTBR found for dividend date {div_date}, skipping")
+                        continue
+
+                # Convert to INR using exact date TTBR
+                import math
+                amount_inr = math.ceil(amount_usd * ttbr)
+
+                dividend_list.append({
+                    'Symbol': symbol,
+                    'Date': div_date,
+                    'Amount (USD)': round(amount_usd, 2),
+                    'TTBR': round(ttbr, 2),
+                    'Amount (INR)': amount_inr
+                })
+
+            df_result = pd.DataFrame(dividend_list)
+
+            if not df_result.empty:
+                total_usd = df_result['Amount (USD)'].sum()
+                total_inr = df_result['Amount (INR)'].sum()
+                print(f"[OK] Found {len(df_result)} dividend transactions in {self.calendar_year}")
+                print(f"[OK] Total dividends: ${total_usd:.2f} USD = ₹{total_inr:,} INR")
+
+            return df_result
+
+        except Exception as e:
+            print(f"[!] Error parsing dividend data: {e}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
     def _detect_country(self, address):
         """Detect country from address and return ITR-compliant country name and code."""
         address_upper = address.upper()
@@ -776,7 +908,7 @@ class ScheduleFAApp:
             self.df_sbi = self._fetch_sbi_rates_web(extra_dates=unique_extra)
             self._extra_ttbr_dates_loaded = True
 
-    def process_etrade_exports(self, bystatus_path=None, gl_path=None, account_no="146239025", config=None):
+    def process_etrade_exports(self, bystatus_path=None, gl_path=None, transaction_history_path=None, account_no="146239025", config=None):
         # Default paths - check inputs folder first, then root folder
         if bystatus_path is None:
             if os.path.exists("inputs/ByStatus_expanded.xlsx"):
@@ -795,12 +927,31 @@ class ScheduleFAApp:
             else:
                 gl_path = None  # G&L file not found - this is OK
 
+        # Transaction History CSV is OPTIONAL - only needed if dividends were received
+        if transaction_history_path is None:
+            if os.path.exists("inputs/Transaction_History.csv"):
+                transaction_history_path = "inputs/Transaction_History.csv"
+            elif os.path.exists("Transaction_History.csv"):
+                transaction_history_path = "Transaction_History.csv"
+            else:
+                transaction_history_path = None  # Transaction History not found - this is OK
+
         if not os.path.exists(bystatus_path):
             raise FileNotFoundError(f"ByStatus file missing: '{bystatus_path}' not found.")
 
         # IMPORTANT: Scan files for pre-FY acquisition dates and reload TTBR if needed
         # This ensures we have TTBR for dates like Nov 2024 for initial value calculations
         self._scan_and_reload_ttbr_if_needed(bystatus_path, gl_path)
+
+        # Parse dividend data from Transaction History (optional - dividends may not exist)
+        df_dividends = self._parse_dividend_data(transaction_history_path)
+
+        # Aggregate dividends per symbol for Table A3
+        # Per ITRFA.in: "Enter dividend once per holding, not split across lots"
+        dividends_per_symbol = {}
+        if not df_dividends.empty:
+            dividends_per_symbol = df_dividends.groupby('Symbol')['Amount (INR)'].sum().to_dict()
+            print(f"[i] Dividends by symbol: {dividends_per_symbol}")
 
         try:
             df_bystatus = pd.read_excel(bystatus_path, sheet_name='Sellable')
@@ -876,6 +1027,9 @@ class ScheduleFAApp:
 
         equity_tranches = []
 
+        # Track which symbols have had dividends assigned (assign to first lot only per ITRFA.in)
+        dividend_assigned_symbols = set()
+
         # 1. Parse Open Lots (Unsold shares)
         for _, row in df_open.iterrows():
             qty = int(row['Sellable Qty.'])
@@ -902,6 +1056,13 @@ class ScheduleFAApp:
 
             init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
 
+            # Assign dividend to FIRST lot of each symbol only (per ITRFA.in guidance)
+            dividend_for_this_lot = 0
+            if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
+                dividend_for_this_lot = int(dividends_per_symbol[symbol])
+                dividend_assigned_symbols.add(symbol)
+                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
                 "CountryCodeExcludingIndia": 2,
@@ -914,7 +1075,7 @@ class ScheduleFAApp:
                 "PeakBalanceDuringPeriod": peak_val,
                 "ClosingBalance": close_val,
                 "_FMV_USD": unit_cost,  # Store FMV for reference (not exported to JSON)
-                "TotGrossAmtPaidCredited": 0,
+                "TotGrossAmtPaidCredited": dividend_for_this_lot,
                 "TotGrossProceeds": 0
             })
 
@@ -957,6 +1118,13 @@ class ScheduleFAApp:
             sell_ttbr = sell_row['TTBR'].values[0] if not sell_row.empty else 89.47
             proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
 
+            # Assign dividend to FIRST lot of each symbol only
+            dividend_for_this_lot = 0
+            if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
+                dividend_for_this_lot = int(dividends_per_symbol[symbol])
+                dividend_assigned_symbols.add(symbol)
+                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
                 "CountryCodeExcludingIndia": 2,
@@ -971,7 +1139,7 @@ class ScheduleFAApp:
                 "_FMV_USD": unit_cost,  # Store FMV for reference (not exported to JSON)
                 "_SaleDate": sell_date,  # Store sale date for Capital Gains sheet (not exported to JSON)
                 "_GrossProceeds": proceeds_inr,  # Store proceeds for Capital Gains sheet
-                "TotGrossAmtPaidCredited": 0,
+                "TotGrossAmtPaidCredited": dividend_for_this_lot,
                 "TotGrossProceeds": proceeds_inr
             })
 
@@ -1018,6 +1186,13 @@ class ScheduleFAApp:
             # Calculate values WITHOUT sell date (so closing balance is > 0)
             init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
 
+            # Assign dividend to FIRST lot of each symbol only
+            dividend_for_this_lot = 0
+            if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
+                dividend_for_this_lot = int(dividends_per_symbol[symbol])
+                dividend_assigned_symbols.add(symbol)
+                print(f"[i] Assigning ₹{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
+
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
                 "CountryCodeExcludingIndia": 2,
@@ -1032,7 +1207,7 @@ class ScheduleFAApp:
                 "_FMV_USD": unit_cost,
                 "_SaleDate": sell_date,  # Store sale date for Capital Gains sheet
                 "_GrossProceeds": proceeds_inr,  # Store proceeds for Capital Gains sheet
-                "TotGrossAmtPaidCredited": 0,
+                "TotGrossAmtPaidCredited": dividend_for_this_lot,
                 "TotGrossProceeds": 0  # 0 because not sold yet in this FY
             })
 
@@ -1232,7 +1407,18 @@ class ScheduleFAApp:
             final_account_no = ""
             print(f"[i] Account number not found - leaving empty")
 
-        custodial_accounts = [{
+        # Calculate total dividends (all symbols combined)
+        total_dividends_inr = int(df_dividends['Amount (INR)'].sum()) if not df_dividends.empty else 0
+
+        # Calculate total sale proceeds (all symbols combined)
+        total_sale_proceeds_inr = sum(t.get("TotGrossProceeds", 0) for t in equity_tranches)
+
+        # Build Table A2 - Create separate rows for dividends and sale proceeds if both exist
+        # Per ITRFA.in guidance: "If both dividend AND sales, create TWO A2 rows"
+        custodial_accounts = []
+
+        # Base account info (same for all rows)
+        base_account_info = {
             "CountryName": acc_config.get("country_name", "UNITED STATES OF AMERICA"),
             "CountryCodeExcludingIndia": int(acc_config.get("country_code", 2)),
             "FinancialInstName": self.clean_text_for_itr(acc_config.get("financial_institution_name", "E*TRADE Securities LLC")),
@@ -1242,10 +1428,52 @@ class ScheduleFAApp:
             "Status": acc_config.get("status", "BENEFICIAL_OWNER"),
             "AccOpenDate": acc_config.get("account_opening_date", ""),
             "PeakBalanceDuringPeriod": total_peak_account_inr,
-            "ClosingBalance": total_closing_account_inr,
-            "GrossAmtPaidCredited": 0,
-            "NatureOfAmount": "N"
-        }]
+            "ClosingBalance": total_closing_account_inr
+        }
+
+        # Case 1: Both dividends AND sales exist → Create TWO rows
+        if total_dividends_inr > 0 and total_sale_proceeds_inr > 0:
+            # Row 1: Dividend
+            custodial_accounts.append({
+                **base_account_info,
+                "GrossAmtPaidCredited": total_dividends_inr,
+                "NatureOfAmount": "D"  # D = Dividend
+            })
+            # Row 2: Sale proceeds
+            custodial_accounts.append({
+                **base_account_info,
+                "GrossAmtPaidCredited": total_sale_proceeds_inr,
+                "NatureOfAmount": "P"  # P = Proceeds from Sale or Redemption of Financial Assets
+            })
+            print(f"[i] Table A2: Creating TWO rows (Dividend: ₹{total_dividends_inr:,}, Sale Proceeds: ₹{total_sale_proceeds_inr:,})")
+
+        # Case 2: Only dividends (no sales) → Create ONE row
+        elif total_dividends_inr > 0:
+            custodial_accounts.append({
+                **base_account_info,
+                "GrossAmtPaidCredited": total_dividends_inr,
+                "NatureOfAmount": "D"  # D = Dividend
+            })
+            print(f"[i] Table A2: Creating ONE row (Dividend only: ₹{total_dividends_inr:,})")
+
+        # Case 3: Only sales (no dividends) → Create ONE row
+        elif total_sale_proceeds_inr > 0:
+            custodial_accounts.append({
+                **base_account_info,
+                "GrossAmtPaidCredited": total_sale_proceeds_inr,
+                "NatureOfAmount": "P"  # P = Proceeds from Sale
+            })
+            print(f"[i] Table A2: Creating ONE row (Sale Proceeds only: ₹{total_sale_proceeds_inr:,})")
+
+        # Case 4: No dividends AND no sales → Create ONE row with N (No Amount)
+        else:
+            custodial_accounts.append({
+                **base_account_info,
+                "GrossAmtPaidCredited": 0,
+                "NatureOfAmount": "N"  # N = No Amount
+            })
+            print(f"[i] Table A2: Creating ONE row (No dividends or sales)")
+
 
         # Clean internal fields (those starting with _) before exporting to JSON
         equity_tranches_clean = []
@@ -1882,6 +2110,10 @@ class ScheduleFAApp:
             pre_fy_sheet_name = f"Pre-{self.calendar_year} Holdings Init Val"
             df_pre_fy.to_excel(writer, sheet_name=pre_fy_sheet_name, index=False)
 
+            # Add Dividend Reference sheet if dividends exist
+            if not df_dividends.empty:
+                df_dividends.to_excel(writer, sheet_name="Dividend Transactions", index=False)
+
             # Apply beautiful formatting to all sheets
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
             from openpyxl.utils import get_column_letter
@@ -2164,9 +2396,12 @@ class ScheduleFAApp:
         # Try simple format without quotes or trailing commas
         df_a3_csv.to_csv(csv_a3_filename, index=False, quoting=0)  # quoting=0 = QUOTE_MINIMAL
 
+        # Count total sheets
+        total_sheets = 7 + (1 if not df_dividends.empty else 0)
+
         print(f"\n[SUCCESS] Finished processing calendar year {self.calendar_year}!")
         print(f"    - JSON Output:  {json_filename}")
-        print(f"    - Excel Output: {excel_filename} (7 sheets)")
+        print(f"    - Excel Output: {excel_filename} ({total_sheets} sheets)")
         print(f"        - Table A2 Custodial Acc")
         print(f"        - Table A3 Equity Interest")
         print(f"        - Excluded from A3 (Sales from previous years)")
@@ -2174,6 +2409,8 @@ class ScheduleFAApp:
         print(f"        - Reference - Daily Rates (AMD prices + SBI TTBR)")
         print(f"        - A2 Peak Calculation (Daily account values)")
         print(f"        - Pre-{self.calendar_year} Holdings Init Val")
+        if not df_dividends.empty:
+            print(f"        - Dividend Transactions ({len(df_dividends)} payments)")
         print(f"    - CSV A2:       {csv_a2_filename}")
         print(f"    - CSV A3:       {csv_a3_filename}")
         print(f"    - Total Equity Tranches: {len(equity_tranches)}")
@@ -2208,12 +2445,15 @@ if __name__ == "__main__":
     # Input file paths - auto-detect from inputs folder
     BYSTATUS_FILE = "inputs/ByStatus_expanded.xlsx"
     GL_FILE = "inputs/G&L_Expanded.xlsx"
+    TRANSACTION_HISTORY_FILE = "inputs/Transaction_History.csv"
 
     # Fallback to root if inputs folder doesn't have them
     if not os.path.exists(BYSTATUS_FILE):
         BYSTATUS_FILE = "ByStatus_expanded.xlsx"
     if not os.path.exists(GL_FILE):
         GL_FILE = "G&L_Expanded.xlsx"
+    if not os.path.exists(TRANSACTION_HISTORY_FILE):
+        TRANSACTION_HISTORY_FILE = "Transaction_History.csv"
 
     print("\n[*] Starting Schedule FA generation (WEB SCRAPING MODE)...")
     print(f"[*] This will open Chrome browser in background")
@@ -2265,6 +2505,7 @@ if __name__ == "__main__":
         app.process_etrade_exports(
             bystatus_path=BYSTATUS_FILE,
             gl_path=GL_FILE,
+            transaction_history_path=TRANSACTION_HISTORY_FILE,
             account_no=ACCOUNT_NUMBER,
             config=config
         )

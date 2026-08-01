@@ -10,6 +10,7 @@ Automated generator for Schedule FA (Foreign Assets) for ITR2 filing in India.
 Place these files in `inputs/` folder:
 - `ByStatus_expanded.xlsx` (required)
 - `G&L_Expanded.xlsx` (optional - only if you sold stocks in this FY)
+- `Transaction_History.csv` (optional - only if you received dividends)
 
 ### Step 2: Run
 Double-click: **`GENERATE_ITR_FA.bat`**
@@ -28,7 +29,8 @@ Check `outputs/` folder for generated files.
 ✅ **Multi-country** - Auto-detects USA, Canada, UK, etc. from company address  
 ✅ **No manual data entry** - Fetches company info from Yahoo Finance  
 ✅ **Capital gains** - Calculates LTCG/STCG with advance tax schedule (Rule 234C)  
-✅ **Complete output** - JSON + Excel (7 sheets) + 2 CSVs + output log  
+✅ **Dividend support** - Auto-processes dividends from Transaction History CSV  
+✅ **Complete output** - JSON + Excel (7-8 sheets) + 2 CSVs + output log  
 ✅ **Beautiful formatting** - Professional Excel with currency symbols, colors, borders  
 
 ---
@@ -49,6 +51,17 @@ The tool includes future sales (after current FY) in Capital Gains sheet:
 - Calculates when to pay advance tax (Jul/Sep/Dec/Mar of next FY)
 - Helps you plan: "If shares sell in Jun 2026, pay by Sep 15, 2026"
 - Marked with "- FUTURE" in nature column
+
+### ✅ Dividend Support (Schedule FA)
+The tool correctly processes dividend income for Schedule FA disclosure:
+- **Table A2:** Creates separate rows for dividends and sales (per ITRFA.in guidance)
+- **Table A3:** Assigns dividend once per symbol (on first lot), not split across lots
+- **Exchange Rate:** Uses exact credit date TTBR (per CBDT instructions)
+- **Source:** Transaction History CSV from E*TRADE (optional - no error if missing)
+- **AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees
+- **See:** [docs/dividends.md](docs/dividends.md) for detailed documentation
+
+**IMPORTANT:** This is Schedule FA (asset disclosure) only. For Schedule OS (income tax), see ITRFA.in.
 
 ## Important Limitations
 
