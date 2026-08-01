@@ -365,7 +365,8 @@ class ScheduleFAApp:
                 'Total Foreign Source Income',
                 'Total Tax Paid Outside India',
                 'Total Tax Relief Available (Schedule TR)',
-                ''
+                '',
+                'WARNINGS / NOTES'
             ],
             self.indian_fy: [
                 self.assessment_year,
@@ -374,13 +375,14 @@ class ScheduleFAApp:
                 total_foreign_income,
                 total_tax_paid_inr,
                 0,  # Tax relief calculated later
+                '',
                 ''
             ]
         }
 
         # Add warning notes if applicable
         if total_div_inr == 0 and total_cg_inr == 0:
-            fsi_data['Indian Financial Year'].append('WARNINGS / NOTES')
+            fsi_data['Indian Financial Year'].append('')
             fsi_data[self.indian_fy].append(f"• No dividend, NRA withholding, or capital-gains activity found in Indian FY {self.indian_fy} (Apr-Mar)")
 
         df_schedule_fsi = pd.DataFrame(fsi_data)
@@ -2287,19 +2289,19 @@ class ScheduleFAApp:
             df_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
             df_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
 
-            # Insert Schedule OS and FSI right after A3
-            df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
-            df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
-
-            df_excluded_a3.to_excel(writer, sheet_name="Excluded from A3", index=False)
-
-            # Write Capital Gains sheet with two tables
+            # Write Capital Gains sheet BEFORE OS and FSI (per user request)
             # Table 1: Sale Details (starts at row 1)
             df_sale_details.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=0)
 
             # Table 2: Advance Tax Summary (starts after Table 1 + 3 blank rows)
             start_row_table2 = len(df_sale_details) + 4  # +1 for header, +3 for spacing
             df_advance_tax.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=start_row_table2)
+
+            # Insert Schedule OS and FSI after Capital Gains
+            df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
+            df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
+
+            df_excluded_a3.to_excel(writer, sheet_name="Excluded from A3", index=False)
             df_reference.to_excel(writer, sheet_name="Reference - Daily Rates", index=False)
             df_a2_peak.to_excel(writer, sheet_name="A2 Peak Calculation", index=False)
             pre_fy_sheet_name = f"Pre-{self.calendar_year} Holdings Init Val"
@@ -2673,10 +2675,10 @@ class ScheduleFAApp:
         print(f"    - Excel Output: {excel_filename} ({total_sheets} sheets)")
         print(f"        - Table A2 Custodial Acc")
         print(f"        - Table A3 Equity Interest")
+        print(f"        - Capital Gains (Current + Future sales)")
         print(f"        - Schedule OS (Other Sources - Dividend Income)")
         print(f"        - Schedule FSI (Foreign Source Income)")
         print(f"        - Excluded from A3 (Sales from previous years)")
-        print(f"        - Capital Gains (Current + Future sales)")
         print(f"        - Reference - Daily Rates (AMD prices + SBI TTBR)")
         print(f"        - A2 Peak Calculation (Daily account values)")
         print(f"        - Pre-{self.calendar_year} Holdings Init Val")
