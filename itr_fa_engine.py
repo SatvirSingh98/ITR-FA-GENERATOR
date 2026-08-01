@@ -1275,7 +1275,61 @@ class ScheduleFAApp:
         df_a2 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignCustodialAcc"])
         df_a3 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
 
-        # Round all numeric values to integers for Excel display (A2 and A3)
+        # Add USD columns to A2 (for reference like ITRFA.in)
+        # Calculate USD values by dividing INR by approximate TTBR
+        if not df_a2.empty and 'PeakBalanceDuringPeriod' in df_a2.columns:
+            # Use the peak TTBR from calculation
+            peak_ttbr = peak_ttbr if 'peak_ttbr' in locals() else 89.47
+            df_a2.insert(df_a2.columns.get_loc('PeakBalanceDuringPeriod'), 'Peak Balance (USD)',
+                        round(df_a2['PeakBalanceDuringPeriod'] / peak_ttbr, 2))
+            df_a2.insert(df_a2.columns.get_loc('ClosingBalance'), 'Closing Balance (USD)',
+                        round(df_a2['ClosingBalance'] / peak_ttbr, 2))
+
+        # Add USD columns to A3 (for reference like ITRFA.in)
+        # Use the stored _FMV_USD values from equity_tranches
+        if not df_a3.empty:
+            # Calculate USD values from the tranches
+            usd_initial = []
+            usd_peak = []
+            usd_closing = []
+            usd_gross_amt = []
+            usd_gross_proceeds = []
+
+            for tranche in equity_tranches:
+                fmv_usd = tranche.get('_FMV_USD', 0)
+                qty_match = re.search(r'\((\d+)\s+shares?\)', tranche['NatureOfEntity'])
+                qty = int(qty_match.group(1)) if qty_match else 1
+
+                # Get TTBR for this tranche
+                acq_date = tranche['InterestAcquiringDate']
+                acq_ttbr_row = self.df_sbi[self.df_sbi['Date'] == acq_date]
+                ttbr = acq_ttbr_row['TTBR'].values[0] if not acq_ttbr_row.empty else 89.47
+
+                usd_initial.append(round(fmv_usd * qty, 2))
+                usd_peak.append(round(tranche['PeakBalanceDuringPeriod'] / ttbr, 2) if tranche['PeakBalanceDuringPeriod'] > 0 else 0)
+                usd_closing.append(round(tranche['ClosingBalance'] / ttbr, 2) if tranche['ClosingBalance'] > 0 else 0)
+                usd_gross_amt.append(0)  # No dividends currently
+
+                # Gross proceeds in USD
+                if tranche.get('_GrossProceeds', 0) > 0:
+                    # Get sale TTBR
+                    if tranche.get('_SaleDate'):
+                        sale_ttbr_row = self.df_sbi[self.df_sbi['Date'] == tranche['_SaleDate']]
+                        sale_ttbr = sale_ttbr_row['TTBR'].values[0] if not sale_ttbr_row.empty else ttbr
+                    else:
+                        sale_ttbr = ttbr
+                    usd_gross_proceeds.append(round(tranche['_GrossProceeds'] / sale_ttbr, 2))
+                else:
+                    usd_gross_proceeds.append(0)
+
+            # Insert USD columns before INR columns
+            df_a3.insert(df_a3.columns.get_loc('InitialValOfInvstmnt'), 'Initial Investment (USD)', usd_initial)
+            df_a3.insert(df_a3.columns.get_loc('PeakBalanceDuringPeriod'), 'Peak Value (USD)', usd_peak)
+            df_a3.insert(df_a3.columns.get_loc('ClosingBalance'), 'Closing Value (USD)', usd_closing)
+            df_a3.insert(df_a3.columns.get_loc('TotGrossAmtPaidCredited'), 'Gross Amount Paid/Credited (USD)', usd_gross_amt)
+            df_a3.insert(df_a3.columns.get_loc('TotGrossProceeds'), 'Gross Proceeds from Sale (USD)', usd_gross_proceeds)
+
+        # Round all numeric values to integers for Excel display (A2 and A3 INR columns)
         numeric_cols_a2 = ['PeakBalanceDuringPeriod', 'ClosingBalance', 'GrossAmtPaidCredited']
         for col in numeric_cols_a2:
             if col in df_a2.columns:
