@@ -203,6 +203,212 @@ class ScheduleFAApp:
             print(f"[OK] TTBR range: {df_year['TTBR'].min():.2f} to {df_year['TTBR'].max():.2f}")
             return df_year[['Date', 'TTBR']]
 
+    def _calculate_schedule_os_fsi(self, df_dividends, df_capital_gains):
+        """
+        Calculate Schedule OS (Other Sources) and Schedule FSI (Foreign Source Income).
+
+        Schedule OS uses Rule 115(1)(e): Last day of month BEFORE dividend month
+        Schedule FSI aggregates dividend + capital gains income
+
+        Returns: (df_schedule_os, df_schedule_fsi)
+        """
+        import math
+
+        # CRITICAL: Schedule OS uses FINANCIAL YEAR (Apr-Mar), NOT calendar year!
+        fy_start = f"{self.calendar_year}-04-01"
+        fy_end = f"{self.calendar_year + 1}-03-31"
+
+        # Filter dividends to Financial Year
+        if not df_dividends.empty:
+            df_div_fy = df_dividends.copy()
+            df_div_fy['Date'] = pd.to_datetime(df_div_fy['Date'])
+            df_div_fy = df_div_fy[(df_div_fy['Date'] >= fy_start) & (df_div_fy['Date'] <= fy_end)].copy()
+        else:
+            df_div_fy = pd.DataFrame(columns=['Symbol', 'Date', 'Amount (USD)', 'TTBR', 'Amount (INR)'])
+
+        # Recalculate dividends using Rule 115(1)(e) for Schedule OS
+        div_os_data = []
+        for _, row in df_div_fy.iterrows():
+            div_date = pd.to_datetime(row['Date'])
+            amount_usd = row['Amount (USD)']
+
+            # Rule 115(1)(e): Last day of month BEFORE dividend month
+            if div_date.month == 1:
+                specified_year = div_date.year - 1
+                specified_month = 12
+            else:
+                specified_year = div_date.year
+                specified_month = div_date.month - 1
+
+            import calendar
+            last_day = calendar.monthrange(specified_year, specified_month)[1]
+            specified_date_str = f"{specified_year}-{specified_month:02d}-{last_day:02d}"
+
+            # Get TTBR for specified date
+            ttbr_row = self.df_sbi[self.df_sbi['Date'] == specified_date_str]
+            if not ttbr_row.empty:
+                ttbr_os = ttbr_row['TTBR'].values[0]
+            else:
+                # Use backward search
+                sbi_before = self.df_sbi[self.df_sbi['Date'] < specified_date_str]
+                if not sbi_before.empty:
+                    closest_date = sbi_before['Date'].max()
+                    ttbr_os = sbi_before[sbi_before['Date'] == closest_date]['TTBR'].values[0]
+                else:
+                    ttbr_os = row['TTBR']  # Fallback to Schedule FA rate
+
+            amount_inr_os = math.ceil(amount_usd * ttbr_os)
+
+            div_os_data.append({
+                'Symbol': row['Symbol'],
+                'Date': div_date.strftime('%Y-%m-%d'),
+                'Amount (USD)': amount_usd,
+                'Specified Date (Rule 115(1)(e))': specified_date_str,
+                'TTBR': round(ttbr_os, 2),
+                'Amount (INR)': amount_inr_os
+            })
+
+        df_div_os = pd.DataFrame(div_os_data)
+
+        # Calculate quarterly breakup (Section 234C)
+        # Quarter 1: Apr 1 - Jun 15
+        # Quarter 2: Jun 16 - Sep 15
+        # Quarter 3: Sep 16 - Dec 15
+        # Quarter 4: Dec 16 - Mar 15
+        # Quarter 5: Mar 16 - Mar 31
+
+        quarterly_breakup = {
+            'Q1 (Apr 1 - Jun 15)': 0,
+            'Q2 (Jun 16 - Sep 15)': 0,
+            'Q3 (Sep 16 - Dec 15)': 0,
+            'Q4 (Dec 16 - Mar 15)': 0,
+            'Q5 (Mar 16 - Mar 31)': 0
+        }
+
+        for _, row in df_div_os.iterrows():
+            div_date = pd.to_datetime(row['Date'])
+            amount = row['Amount (INR)']
+            month = div_date.month
+            day = div_date.day
+
+            # Determine quarter based on payment date
+            if month <= 6 and (month < 6 or day <= 15):
+                quarterly_breakup['Q1 (Apr 1 - Jun 15)'] += amount
+            elif month <= 9 and (month < 9 or day <= 15):
+                quarterly_breakup['Q2 (Jun 16 - Sep 15)'] += amount
+            elif month <= 12 and (month < 12 or day <= 15):
+                quarterly_breakup['Q3 (Sep 16 - Dec 15)'] += amount
+            elif month <= 3 or (month == 3 and day <= 15):
+                quarterly_breakup['Q4 (Dec 16 - Mar 15)'] += amount
+            else:
+                quarterly_breakup['Q5 (Mar 16 - Mar 31)'] += amount
+
+        # Build Schedule OS DataFrame
+        total_div_usd = df_div_os['Amount (USD)'].sum() if not df_div_os.empty else 0
+        total_div_inr = df_div_os['Amount (INR)'].sum() if not df_div_os.empty else 0
+
+        os_data = {
+            'Indian Financial Year': [
+                'Assessment Year',
+                'Total Dividend Income (USD)',
+                'Total Dividend Income (INR ₹)',
+                '',
+                'Quarter (Section 234C)',
+                '',
+                'WARNINGS / NOTES'
+            ],
+            self.indian_fy: [
+                self.assessment_year,
+                round(total_div_usd, 2),
+                int(total_div_inr),
+                '',
+                'Dividend Income (INR ₹)',
+                '',
+                ''
+            ]
+        }
+
+        # Add quarterly rows
+        for quarter, amount in quarterly_breakup.items():
+            os_data['Indian Financial Year'].append(quarter)
+            os_data[self.indian_fy].append(int(amount))
+
+        # Add warning if no dividends
+        if total_div_inr == 0:
+            os_data['Indian Financial Year'].append('')
+            os_data[self.indian_fy].append(f"• No dividend activity found in Indian FY {self.indian_fy} (Apr-Mar)")
+
+        df_schedule_os = pd.DataFrame(os_data)
+
+        # Build Schedule FSI DataFrame
+        # Aggregate capital gains from Financial Year sales
+        total_cg_inr = 0
+        if not df_capital_gains.empty:
+            # Filter capital gains to Financial Year
+            df_cg_fy = df_capital_gains.copy()
+            df_cg_fy['Sale Date'] = pd.to_datetime(df_cg_fy['Sale Date'])
+            df_cg_fy = df_cg_fy[(df_cg_fy['Sale Date'] >= fy_start) & (df_cg_fy['Sale Date'] <= fy_end)]
+            total_cg_inr = int(df_cg_fy['Capital Gain (INR)'].sum()) if not df_cg_fy.empty else 0
+
+        total_foreign_income = int(total_div_inr + total_cg_inr)
+
+        # TODO: Extract NRA withholding from Transaction History
+        total_tax_paid_usd = 0
+        total_tax_paid_inr = 0
+
+        fsi_data = {
+            'Indian Financial Year': [
+                'Assessment Year',
+                'Dividend Income (Foreign)',
+                'Capital Gains Income (Foreign, per Schedule CG)',
+                'Total Foreign Source Income',
+                'Total Tax Paid Outside India',
+                'Total Tax Relief Available (Schedule TR)',
+                '',
+                'Country',
+                '',
+                'WARNINGS / NOTES'
+            ],
+            self.indian_fy: [
+                self.assessment_year,
+                int(total_div_inr),
+                total_cg_inr,
+                total_foreign_income,
+                total_tax_paid_inr,
+                0,  # Tax relief calculated later
+                '',
+                'Country Code',
+                '',
+                ''
+            ],
+            'Unnamed: 2': [''] * 10,
+            'Unnamed: 3': [''] * 10,
+            'Unnamed: 4': [''] * 10,
+            'Unnamed: 5': [''] * 10,
+            'Unnamed: 6': [''] * 10,
+            'Unnamed: 7': [''] * 10,
+            'Unnamed: 8': [''] * 10,
+            'Unnamed: 9': [''] * 10
+        }
+
+        # Fill in header row for country details
+        fsi_data['Unnamed: 2'][7] = 'TIN / Passport No.'
+        fsi_data['Unnamed: 3'][7] = 'DTAA Article'
+        fsi_data['Unnamed: 4'][7] = 'Dividend Income (USD)'
+        fsi_data['Unnamed: 5'][7] = 'Dividend Income (INR ₹)'
+        fsi_data['Unnamed: 6'][7] = 'Capital Gains Income (INR ₹)'
+        fsi_data['Unnamed: 7'][7] = 'Tax Paid (USD)'
+        fsi_data['Unnamed: 8'][7] = 'Tax Paid (INR ₹)'
+        fsi_data['Unnamed: 9'][7] = 'Tax Relief Available (INR ₹)'
+
+        # Add warning notes
+        if total_div_inr == 0 and total_cg_inr == 0:
+            fsi_data['Indian Financial Year'][9] = f"• No dividend, NRA withholding, or capital-gains activity found in Indian FY {self.indian_fy} (Apr-Mar)"
+
+        df_schedule_fsi = pd.DataFrame(fsi_data)
+
+        return df_schedule_os, df_schedule_fsi, df_div_os
+
     def _parse_dividend_data(self, transaction_history_path=None):
         """
         Parse dividend transactions from E*TRADE Transaction History CSV.
@@ -2002,6 +2208,12 @@ class ScheduleFAApp:
                     'Adv Tax by Mar 15 (100%)': adv_tax_mar
                 })
 
+        # Generate Schedule OS and FSI
+        print(f"\n[*] Generating Schedule OS and Schedule FSI...")
+        df_schedule_os, df_schedule_fsi, df_div_os = self._calculate_schedule_os_fsi(df_dividends, pd.DataFrame(capital_gains_data))
+        print(f"[OK] Schedule OS: Total dividend income ₹{df_schedule_os[self.indian_fy][2]:,}" if len(df_schedule_os) > 2 else "[OK] Schedule OS: No dividends")
+        print(f"[OK] Schedule FSI: Total foreign income ₹{df_schedule_fsi[self.indian_fy][3]:,}" if len(df_schedule_fsi) > 3 else "[OK] Schedule FSI: No foreign income")
+
         # Create two separate tables for Capital Gains sheet
 
         # Table 1: Sale Details (without advance tax columns)
@@ -2096,6 +2308,11 @@ class ScheduleFAApp:
         with pd.ExcelWriter(excel_filename, engine="openpyxl") as writer:
             df_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
             df_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
+
+            # Insert Schedule OS and FSI right after A3
+            df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
+            df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
+
             df_excluded_a3.to_excel(writer, sheet_name="Excluded from A3", index=False)
 
             # Write Capital Gains sheet with two tables
@@ -2110,9 +2327,11 @@ class ScheduleFAApp:
             pre_fy_sheet_name = f"Pre-{self.calendar_year} Holdings Init Val"
             df_pre_fy.to_excel(writer, sheet_name=pre_fy_sheet_name, index=False)
 
-            # Add Dividend Reference sheet if dividends exist
+            # Add Dividend Reference sheets if dividends exist
             if not df_dividends.empty:
-                df_dividends.to_excel(writer, sheet_name="Dividend Transactions", index=False)
+                df_dividends.to_excel(writer, sheet_name="Dividends (Schedule FA)", index=False)
+            if not df_div_os.empty:
+                df_div_os.to_excel(writer, sheet_name="Dividends (Schedule OS)", index=False)
 
             # Apply beautiful formatting to all sheets
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -2397,20 +2616,27 @@ class ScheduleFAApp:
         df_a3_csv.to_csv(csv_a3_filename, index=False, quoting=0)  # quoting=0 = QUOTE_MINIMAL
 
         # Count total sheets
-        total_sheets = 7 + (1 if not df_dividends.empty else 0)
+        base_sheets = 9  # A2, A3, OS, FSI, Excluded, CG, Reference, A2 Peak, Pre-FY
+        dividend_sheets = 0
+        if not df_dividends.empty:
+            dividend_sheets = 2  # Dividends (FA) and Dividends (OS)
+        total_sheets = base_sheets + dividend_sheets
 
         print(f"\n[SUCCESS] Finished processing calendar year {self.calendar_year}!")
         print(f"    - JSON Output:  {json_filename}")
         print(f"    - Excel Output: {excel_filename} ({total_sheets} sheets)")
         print(f"        - Table A2 Custodial Acc")
         print(f"        - Table A3 Equity Interest")
+        print(f"        - Schedule OS (Other Sources - Dividend Income)")
+        print(f"        - Schedule FSI (Foreign Source Income)")
         print(f"        - Excluded from A3 (Sales from previous years)")
         print(f"        - Capital Gains (Current + Future sales)")
         print(f"        - Reference - Daily Rates (AMD prices + SBI TTBR)")
         print(f"        - A2 Peak Calculation (Daily account values)")
         print(f"        - Pre-{self.calendar_year} Holdings Init Val")
         if not df_dividends.empty:
-            print(f"        - Dividend Transactions ({len(df_dividends)} payments)")
+            print(f"        - Dividends (Schedule FA) - {len(df_dividends)} payments, exact date TTBR")
+            print(f"        - Dividends (Schedule OS) - {len(df_div_os)} payments, Rule 115(1)(e) TTBR")
         print(f"    - CSV A2:       {csv_a2_filename}")
         print(f"    - CSV A3:       {csv_a3_filename}")
         print(f"    - Total Equity Tranches: {len(equity_tranches)}")

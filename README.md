@@ -29,8 +29,9 @@ Check `outputs/` folder for generated files.
 ✅ **Multi-country** - Auto-detects USA, Canada, UK, etc. from company address  
 ✅ **No manual data entry** - Fetches company info from Yahoo Finance  
 ✅ **Capital gains** - Calculates LTCG/STCG with advance tax schedule (Rule 234C)  
-✅ **Dividend support** - Auto-processes dividends from Transaction History CSV  
-✅ **Complete output** - JSON + Excel (7-8 sheets) + 2 CSVs + output log  
+✅ **Dividend support** - Auto-processes dividends with Schedule FA + Schedule OS  
+✅ **Schedule OS & FSI** - Dividend income and foreign source income reporting  
+✅ **Complete output** - JSON + Excel (9-11 sheets) + 2 CSVs + output log  
 ✅ **Beautiful formatting** - Professional Excel with currency symbols, colors, borders  
 
 ---
@@ -52,16 +53,33 @@ The tool includes future sales (after current FY) in Capital Gains sheet:
 - Helps you plan: "If shares sell in Jun 2026, pay by Sep 15, 2026"
 - Marked with "- FUTURE" in nature column
 
-### ✅ Dividend Support (Schedule FA)
-The tool correctly processes dividend income for Schedule FA disclosure:
-- **Table A2:** Creates separate rows for dividends and sales (per ITRFA.in guidance)
-- **Table A3:** Assigns dividend once per symbol (on first lot), not split across lots
-- **Exchange Rate:** Uses exact credit date TTBR (per CBDT instructions)
-- **Source:** Transaction History CSV from E*TRADE (optional - no error if missing)
-- **AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees
-- **See:** [docs/dividends.md](docs/dividends.md) for detailed documentation
+### ✅ Dividend Support (Schedule FA + Schedule OS + Schedule FSI)
+The tool processes dividend income for COMPLETE ITR-2 filing:
 
-**IMPORTANT:** This is Schedule FA (asset disclosure) only. For Schedule OS (income tax), see ITRFA.in.
+**Schedule FA (Asset Disclosure):**
+- **Table A2:** Creates separate rows for dividends and sales
+- **Table A3:** Assigns dividend once per symbol (first lot)
+- **Exchange Rate:** Exact credit date TTBR (per CBDT)
+
+**Schedule OS (Other Sources Income):**
+- **Total Dividend Income:** USD and INR totals
+- **Quarterly Breakup:** Section 234C advance tax periods
+- **Exchange Rate:** Rule 115(1)(e) - last day of month BEFORE dividend month
+- **Financial Year:** Apr-Mar (different from Schedule FA's Jan-Dec!)
+
+**Schedule FSI (Foreign Source Income):**
+- **Dividend Income:** From Schedule OS
+- **Capital Gains:** From Schedule CG
+- **Total Foreign Income:** Combined reporting
+- **Country Details:** USA with DTAA Article info
+
+**Key Feature:** Tool generates BOTH exchange rates automatically:
+- **Dividends (Schedule FA) sheet:** Exact date TTBR for asset disclosure
+- **Dividends (Schedule OS) sheet:** Rule 115(1)(e) TTBR for tax calculation
+- Shows the difference side-by-side!
+
+**AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees  
+**See:** [docs/dividends.md](docs/dividends.md) for detailed documentation
 
 ## Important Limitations
 
