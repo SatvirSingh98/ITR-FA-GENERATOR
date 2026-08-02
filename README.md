@@ -89,6 +89,28 @@ The tool processes dividend income for COMPLETE ITR-2 filing:
 - **Schedule FA dividends:** [docs/dividends.md](docs/dividends.md)
 - **Schedule OS & FSI:** [docs/schedule_os_fsi.md](docs/schedule_os_fsi.md)
 
+### ✅ Tax Withholding: Net Share Settlement vs Sell-to-Cover
+
+**IMPORTANT:** Tool correctly handles BOTH tax withholding methods:
+
+**Net Share Settlement (AMD typical):**
+- Employer withholds shares **BEFORE issuing** them to you
+- You never receive the withheld shares
+- ✅ **NO Schedule FA/CG reporting** (shares never held)
+- Tool correctly **ignores** these withholding rows
+
+**Sell-to-Cover (Different brokers):**
+- Employer issues ALL shares, broker **sells portion** on your behalf
+- ✅ **MUST report in Schedule FA & CG** (actual sale)
+- Tool correctly **includes** these from G&L_Expanded.xlsx
+
+**How to tell the difference:**
+- Net settlement: `Shares Traded for taxes` column = NULL in E*TRADE
+- Sell-to-cover: Withholding sale appears in G&L_Expanded.xlsx (same-day sale)
+
+**Documentation:** [docs/closed_lots_verification.md](docs/closed_lots_verification.md)  
+**Source:** [ITRFA.in Sell-to-Cover Guide](https://itrfa.in/blog/schedule-fa-sell-to-cover-capital-gains)
+
 ## Important Limitations
 
 ### ⚠️ E*TRADE Only
