@@ -1,6 +1,11 @@
 # Schedule FA Generator for ITR2
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 Automated generator for Schedule FA (Foreign Assets) for ITR2 filing in India.
+
+**Copyright (C) 2025 Satvir Singh**  
+Licensed under GPL-3.0 - see [LICENSE](LICENSE) for details.
 
 ---
 
