@@ -228,12 +228,9 @@ Advance tax payment schedule (based on sale date):
 
 ## Before Sharing
 
-**Run:** `CLEAN_BEFORE_SHARING.bat`
-
 Removes your personal data:
 - E*TRADE files from `inputs/`
 - Schedule FA from `outputs/`
-- Verifies config has placeholder
 
 ---
 
