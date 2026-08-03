@@ -235,7 +235,7 @@ The tool calculates peak value using this algorithm:
 
 ## Code Reference
 
-**File:** `itr_fa_engine.py`
+**File:** `itr_fa_etrade.py`
 
 **Peak Calculation:** Lines 1059-1086
 ```python

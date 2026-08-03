@@ -1597,53 +1597,74 @@ class ScheduleFAApp:
         # CORRECT METHOD: Calculate daily total account value and find maximum
         # (Not sum of individual peaks, since they occur on different dates)
 
-        # Get the daily matrix (stock prices and TTBR for each day)
-        comp_info = self.get_company_details("AMD")
-        df_daily = comp_info["matrix"].copy()
+        # Get all companies from company_cache
+        symbols_in_portfolio = sorted(self.company_cache.keys())
 
-        # For each day, calculate total account value in USD and INR
+        # Build a mapping of company name to symbol for matching tranches
+        # We'll need to match tranches to their company
+        company_name_to_symbol = {}
+        for symbol in symbols_in_portfolio:
+            comp_info = self.get_company_details(symbol)
+            company_name_to_symbol[comp_info["name"]] = symbol
+
+        # Get the daily matrix (dates and TTBR) from first company
+        first_symbol = symbols_in_portfolio[0]
+        first_company = self.get_company_details(first_symbol)
+        df_daily = first_company["matrix"][['Date', 'TTBR']].copy()
+
+        # For each day, calculate total account value across ALL companies
         daily_account_usd = []
         daily_account_inr = []
 
+        import re
         for _, day_row in df_daily.iterrows():
             date = day_row['Date']
-            stock_price = day_row['Stock_Close_USD']
             ttbr = day_row['TTBR']
 
-            # Sum all holdings owned on this date
-            # EXCLUDE Beneficial Interest (unvested RSUs - not yet acquired)
-            total_shares = 0
-            for tranche in equity_tranches:
-                # Skip Beneficial Interest (unvested - not part of custodial account balance)
-                if "Beneficial Interest" in tranche['NatureOfEntity']:
-                    continue
+            # Sum value across all companies
+            total_value_usd = 0
 
-                acq_date = tranche['InterestAcquiringDate']
+            for symbol in symbols_in_portfolio:
+                comp_info = self.get_company_details(symbol)
+                df_matrix = comp_info["matrix"]
 
-                # Determine if we owned this holding on this date
-                # Owned if: acquired on/before this date AND (not sold OR sold after this date)
-                if acq_date <= date:
-                    # Check if sold
-                    if "Sold" in tranche['NatureOfEntity']:
-                        # For sold shares, we need to check the sale date
-                        # We'll assume they were held through Dec 31 for peak calculation
-                        # (Since sold shares also contribute to peak during the year)
-                        pass  # Include them
+                # Get stock price for this date
+                price_row = df_matrix[df_matrix['Date'] == date]
+                if price_row.empty:
+                    continue  # Skip if no price data for this date
+                stock_price = price_row['Stock_Close_USD'].values[0]
 
-                    # Extract quantity from nature string
-                    import re
-                    nature = tranche['NatureOfEntity']
-                    qty_match = re.search(r'\((\d+)\s+shares?\)', nature)
-                    if qty_match:
-                        qty = int(qty_match.group(1))
-                        total_shares += qty
+                # Sum shares of this company owned on this date
+                company_shares = 0
+                for tranche in equity_tranches:
+                    # Skip Beneficial Interest (unvested - not part of custodial account balance)
+                    if "Beneficial Interest" in tranche['NatureOfEntity']:
+                        continue
 
-            # Calculate total account value for this day
-            account_value_usd = total_shares * stock_price
-            account_value_inr = account_value_usd * ttbr
+                    # Match tranche to company
+                    tranche_company_name = tranche['NameOfEntity']
+                    if company_name_to_symbol.get(tranche_company_name) != symbol:
+                        continue  # This tranche belongs to a different company
 
-            daily_account_usd.append(account_value_usd)
-            daily_account_inr.append(account_value_inr)
+                    acq_date = tranche['InterestAcquiringDate']
+
+                    # Determine if we owned this holding on this date
+                    if acq_date <= date:
+                        # Extract quantity from nature string
+                        nature = tranche['NatureOfEntity']
+                        qty_match = re.search(r'\((\d+)\s+shares?\)', nature)
+                        if qty_match:
+                            qty = int(qty_match.group(1))
+                            company_shares += qty
+
+                # Add this company's value to total
+                total_value_usd += company_shares * stock_price
+
+            # Calculate total account value in INR
+            total_value_inr = total_value_usd * ttbr
+
+            daily_account_usd.append(total_value_usd)
+            daily_account_inr.append(total_value_inr)
 
         # Add to dataframe for reference
         df_daily['Total Account Value (USD)'] = daily_account_usd
@@ -1670,9 +1691,9 @@ class ScheduleFAApp:
 
         if client_statement_closing_usd:
             # Use ClientStatement value and convert to INR
-            # Get TTBR rate for Dec 31
-            comp_info = self.get_company_details("AMD")  # Use first symbol's matrix
-            df_matrix = comp_info["matrix"]
+            # Get TTBR rate for Dec 31 from first company's matrix (TTBR is same for all)
+            first_company = self.get_company_details(symbols_in_portfolio[0])
+            df_matrix = first_company["matrix"]
             dec31_row = df_matrix[df_matrix['Date'] == self.end_date]
             closing_ttbr = dec31_row['TTBR'].values[0] if not dec31_row.empty else 89.47
 
@@ -1917,46 +1938,48 @@ class ScheduleFAApp:
         if 'CountryCodeExcludingIndia' in df_a3.columns:
             df_a3['CountryCodeExcludingIndia'] = df_a3['CountryCodeExcludingIndia'].astype(str)
 
-        # Create reference sheet with daily AMD prices and TTBR rates (simplified)
-        df_reference = self._daily_account_matrix[['Date', 'Stock_Close_USD', 'TTBR',
-                                                     'Valuation_Per_Share_INR']].copy()
-        df_reference = df_reference.rename(columns={
-            'Date': 'Date',
-            'Stock_Close_USD': 'AMD Stock Price (USD)',
-            'TTBR': 'SBI TTBR Rate (USD to INR)',
-            'Valuation_Per_Share_INR': 'AMD Value per Share (INR)'
-        })
-        # Round to 2 decimal places for readability
-        df_reference['AMD Stock Price (USD)'] = df_reference['AMD Stock Price (USD)'].round(2)
-        df_reference['SBI TTBR Rate (USD to INR)'] = df_reference['SBI TTBR Rate (USD to INR)'].round(2)
-        df_reference['AMD Value per Share (INR)'] = df_reference['AMD Value per Share (INR)'].round(2)
+        # Create reference sheet with daily stock prices and TTBR rates for ALL companies
+        # Format: Date | SBI TTBR | Symbol1 Price (USD) | Symbol1 Value (INR) | Symbol2 Price (USD) | Symbol2 Value (INR) | ...
 
-        # Add peak per-share info summary (from column D)
-        # Find peak per-share value (maximum of AMD Value per Share INR)
-        peak_share_idx = df_reference['AMD Value per Share (INR)'].idxmax()
-        peak_share_row = df_reference.loc[peak_share_idx]
+        # Get all unique symbols from equity_tranches
+        symbols_in_portfolio = set()
+        for tranche in equity_tranches:
+            # Extract symbol from company name or use stored symbol
+            # For now, we'll get it from company_cache keys
+            pass
 
-        # Add two spacer columns for visual separation
-        df_reference['--'] = ''
-        df_reference['--'] = ''
+        # Get symbols from company cache (these are the ones we actually fetched data for)
+        symbols_in_portfolio = sorted(self.company_cache.keys())
 
-        # Create peak per-share info summary
-        peak_labels = ['PEAK PER-SHARE INFO', 'Peak Date', 'Stock Price (USD)', 'TTBR', 'Peak INR Value']
-        peak_values = [
-            '',
-            str(peak_share_row['Date']),
-            float(peak_share_row['AMD Stock Price (USD)']),
-            float(peak_share_row['SBI TTBR Rate (USD to INR)']),
-            float(peak_share_row['AMD Value per Share (INR)'])
-        ]
+        # Start with Date and TTBR columns from any company's matrix (TTBR is same for all)
+        first_symbol = symbols_in_portfolio[0]
+        first_company = self.get_company_details(first_symbol)
+        df_reference = first_company["matrix"][['Date', 'TTBR']].copy()
+        df_reference = df_reference.rename(columns={'TTBR': 'SBI TTBR'})
 
-        # Pad to match dataframe length
-        while len(peak_labels) < len(df_reference):
-            peak_labels.append('')
-            peak_values.append('')
+        # Add columns for each company (Symbol Price USD, Symbol Value INR)
+        for symbol in symbols_in_portfolio:
+            comp_info = self.get_company_details(symbol)
+            df_company = comp_info["matrix"][['Date', 'Stock_Close_USD', 'Valuation_Per_Share_INR']].copy()
 
-        df_reference['Peak Info'] = peak_labels
-        df_reference['Value'] = peak_values
+            # Merge with main reference dataframe on Date
+            df_reference = pd.merge(
+                df_reference,
+                df_company,
+                on='Date',
+                how='left'
+            )
+
+            # Rename columns with company symbol
+            df_reference = df_reference.rename(columns={
+                'Stock_Close_USD': f'{symbol} (USD)',
+                'Valuation_Per_Share_INR': f'{symbol} (INR)'
+            })
+
+        # Round all numeric columns to 2 decimal places
+        for col in df_reference.columns:
+            if col != 'Date':
+                df_reference[col] = df_reference[col].round(2)
 
         # Create Pre-FY Acquisitions sheet for holdings acquired before the financial year
         pre_fy_data = []
@@ -2008,18 +2031,16 @@ class ScheduleFAApp:
         })
 
         # Create A2 Peak Calculation sheet - showing daily account values
-        df_a2_peak = self._daily_account_matrix[['Date', 'Stock_Close_USD', 'TTBR',
+        df_a2_peak = self._daily_account_matrix[['Date', 'TTBR',
                                                    'Total Account Value (USD)',
                                                    'Total Account Value (INR)']].copy()
         df_a2_peak = df_a2_peak.rename(columns={
             'Date': 'Date',
-            'Stock_Close_USD': 'AMD Stock Price (USD)',
             'TTBR': 'SBI TTBR (USD to INR)',
             'Total Account Value (USD)': 'Total Account Value (USD)',
             'Total Account Value (INR)': 'Total Account Value (INR)'
         })
         # Round values
-        df_a2_peak['AMD Stock Price (USD)'] = df_a2_peak['AMD Stock Price (USD)'].round(2)
         df_a2_peak['SBI TTBR (USD to INR)'] = df_a2_peak['SBI TTBR (USD to INR)'].round(2)
         df_a2_peak['Total Account Value (USD)'] = df_a2_peak['Total Account Value (USD)'].round(2)
         df_a2_peak['Total Account Value (INR)'] = df_a2_peak['Total Account Value (INR)'].round(2)
@@ -2035,7 +2056,6 @@ class ScheduleFAApp:
         # Add peak summary data
         summary_items = [
             ('Peak Date', str(peak_account_row['Date'])),
-            ('Stock Price (USD)', float(peak_account_row['AMD Stock Price (USD)'])),
             ('TTBR', float(peak_account_row['SBI TTBR (USD to INR)'])),
             ('Account Value (USD)', float(peak_account_row['Total Account Value (USD)'])),
             ('Account Value (INR)', round(peak_account_row['Total Account Value (INR)'], 2)),
@@ -2451,8 +2471,6 @@ class ScheduleFAApp:
             df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
 
             df_excluded_a3.to_excel(writer, sheet_name="Excluded from A3", index=False)
-            reference_sheet_name = f"{self.calendar_year} - Daily Rates"
-            df_reference.to_excel(writer, sheet_name=reference_sheet_name, index=False)
             df_a2_peak.to_excel(writer, sheet_name="A2 Peak Calculation", index=False)
             df_peak_details.to_excel(writer, sheet_name="A3 Peak Value Details", index=False)
             pre_fy_sheet_name = f"Pre-{self.calendar_year} Holdings Init Val"
@@ -2463,6 +2481,10 @@ class ScheduleFAApp:
                 df_dividends.to_excel(writer, sheet_name="Dividends (Schedule FA)", index=False)
             if not df_div_os.empty:
                 df_div_os.to_excel(writer, sheet_name="Dividends (Schedule OS)", index=False)
+
+            # Daily Rates sheet at the end (moved from middle)
+            reference_sheet_name = f"{self.calendar_year} - Daily Rates"
+            df_reference.to_excel(writer, sheet_name=reference_sheet_name, index=False)
 
             # Apply beautiful formatting to all sheets
             from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -2830,13 +2852,13 @@ class ScheduleFAApp:
         print(f"        - Schedule OS (Other Sources - Dividend Income)")
         print(f"        - Schedule FSI (Foreign Source Income)")
         print(f"        - Excluded from A3 (Sales from previous years)")
-        print(f"        - {self.calendar_year} - Daily Rates (AMD prices + SBI TTBR)")
         print(f"        - A2 Peak Calculation (Daily account values)")
         print(f"        - A3 Peak Value Details (Peak date and value breakdown per lot)")
         print(f"        - Pre-{self.calendar_year} Holdings Init Val")
         if not df_dividends.empty:
             print(f"        - Dividends (Schedule FA) - {len(df_dividends)} payments, exact date TTBR")
             print(f"        - Dividends (Schedule OS) - {len(df_div_os)} payments, Rule 115(1)(e) TTBR")
+        print(f"        - {self.calendar_year} - Daily Rates (Stock prices + SBI TTBR)")
         print(f"    - CSV A2:       {csv_a2_filename}")
         print(f"    - CSV A3:       {csv_a3_filename}")
         print(f"    - Total Equity Tranches: {len(equity_tranches)}")

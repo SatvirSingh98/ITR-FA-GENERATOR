@@ -137,7 +137,7 @@ cat SBI_FOREX_CARD_RATES_USD.csv   # Linux/Mac
 
 ## Integration with ITR FA Generator
 
-The main script (`itr_fa_engine.py`) automatically uses the CSV if available:
+The main script (`itr_fa_etrade.py`) automatically uses the CSV if available:
 
 1. **First choice**: Read `data/SBI_FOREX_CARD_RATES_USD.csv` (if exists and has data for target year)
 2. **Second choice**: Fetch on-demand using `sbi_forex_fetcher.py`

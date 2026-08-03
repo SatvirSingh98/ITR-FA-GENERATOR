@@ -35,6 +35,6 @@
       "account_opening_date": ""
     },
     "_WARNING": "BUT - you'll need Fidelity's export files in their format!",
-    "_ACTION_NEEDED": "Modify itr_fa_engine.py to handle Fidelity's column names"
+    "_ACTION_NEEDED": "Modify itr_fa_etrade.py to handle Fidelity's column names"
   }
 }

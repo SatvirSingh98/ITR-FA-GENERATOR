@@ -272,7 +272,7 @@ This is CORRECT! Dividend stays with the lot that held shares on payment date.
 ---
 
 ## Code Location
-**File:** `itr_fa_engine.py`  
+**File:** `itr_fa_etrade.py`  
 **Lines:** 1244-1400 (separate row creation for open/sold/future-sold lots)
 
 **Key Sections:**

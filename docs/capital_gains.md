@@ -32,7 +32,7 @@ The **Capital Gains** sheet calculates tax liability on stock sales, categorized
 
 **Common mistake:** Using exact sale/acquisition dates (WRONG!)
 
-**Implementation:** Lines 1552-1602 in `itr_fa_engine.py`
+**Implementation:** Lines 1552-1602 in `itr_fa_etrade.py`
 
 ---
 
@@ -73,7 +73,7 @@ Classification: STCG (not "more than" 24 months)
 
 **Calculation:** Always rounded UP using `math.ceil()`
 
-**Implementation:** Lines 1525-1541 in `itr_fa_engine.py`
+**Implementation:** Lines 1525-1541 in `itr_fa_etrade.py`
 
 ---
 
@@ -111,7 +111,7 @@ CORRECT cost basis: $15,239 → No double taxation
 
 **Prerequisite:** Employer must have taxed the discount as perquisite (normal case for qualified ESPP)
 
-**Implementation:** Lines 1545-1551 in `itr_fa_engine.py`
+**Implementation:** Lines 1545-1551 in `itr_fa_etrade.py`
 
 ---
 

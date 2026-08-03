@@ -27,7 +27,7 @@ You can also manually trigger the workflow:
 
 ## Data Usage
 
-The ITR FA Generator (`itr_fa_engine.py`) automatically reads this CSV file if available (uses `TT BUY` column), otherwise it fetches data on-demand using `sbi_forex_fetcher.py`.
+The ITR FA Generator (`itr_fa_etrade.py`) automatically reads this CSV file if available (uses `TT BUY` column), otherwise it fetches data on-demand using `sbi_forex_fetcher.py`.
 
 ## Data Format
 

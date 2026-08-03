@@ -159,7 +159,7 @@ echo Chrome browser will open in background
 echo.
 
 echo [*] Starting Schedule FA generation...
-venv\Scripts\python.exe itr_fa_engine.py > output_summary.txt 2>&1
+venv\Scripts\python.exe itr_fa_etrade.py > output_summary.txt 2>&1
 
 if errorlevel 1 (
     echo.
