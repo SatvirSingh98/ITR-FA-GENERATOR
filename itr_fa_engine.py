@@ -1150,12 +1150,19 @@ class ScheduleFAApp:
         # Parse dividend data from Transaction History (optional - dividends may not exist)
         df_dividends = self._parse_dividend_data(transaction_history_path)
 
-        # Aggregate dividends per symbol for Table A3
-        # Per ITRFA.in: "Enter dividend once per holding, not split across lots"
-        dividends_per_symbol = {}
+        # Store dividend details for per-lot allocation later
+        # We'll calculate each lot's dividend share based on holdings on dividend date
+        dividend_transactions = []
         if not df_dividends.empty:
-            dividends_per_symbol = df_dividends.groupby('Symbol')['Amount (INR)'].sum().to_dict()
-            print(f"[i] Dividends by symbol: {dividends_per_symbol}")
+            print(f"[*] Found {len(df_dividends)} dividend transactions")
+            for _, div_row in df_dividends.iterrows():
+                dividend_transactions.append({
+                    'symbol': div_row['Symbol'],
+                    'date': div_row['Date'],
+                    'amount_usd': div_row['Amount (USD)'],
+                    'amount_inr': div_row['Amount (INR)']
+                })
+                print(f"    {div_row['Symbol']}: {div_row['Date']} - ${div_row['Amount (USD)']} = INR {div_row['Amount (INR)']:,.2f}")
 
         try:
             df_bystatus = pd.read_excel(bystatus_path, sheet_name='Sellable')
@@ -1230,9 +1237,6 @@ class ScheduleFAApp:
             print("[i] G&L_Expanded.xlsx not found - assuming no sales in this financial year")
 
         equity_tranches = []
-
-        # Track which symbols have had dividends assigned (assign to first lot only per ITRFA.in)
-        dividend_assigned_symbols = set()
 
         # =====================================================================
         # CRITICAL FIX: Group by acquisition date for Table A3
@@ -1403,13 +1407,7 @@ class ScheduleFAApp:
             else:
                 close_val = 0
 
-            # Assign dividend to FIRST lot of each symbol only
-            dividend_for_this_lot = 0
-            if symbol in dividends_per_symbol and symbol not in dividend_assigned_symbols:
-                dividend_for_this_lot = int(dividends_per_symbol[symbol])
-                dividend_assigned_symbols.add(symbol)
-                print(f"[i] Assigning Rs.{dividend_for_this_lot:,} dividend to first {symbol} lot ({nature})")
-
+            # Store lot details for dividend calculation (will calculate dividends later)
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
                 "CountryCodeExcludingIndia": 2,
@@ -1422,11 +1420,83 @@ class ScheduleFAApp:
                 "PeakBalanceDuringPeriod": peak_val,  # For TOTAL original shares
                 "ClosingBalance": close_val,  # For REMAINING shares only
                 "_FMV_USD": unit_cost,
-                "TotGrossAmtPaidCredited": dividend_for_this_lot,
+                "_total_qty": total_qty,  # Store for dividend calculation
+                "_open_qty": open_qty,    # Shares still holding
+                "_sold_qty": sold_qty,     # Shares sold
+                "_sold_details": lot['sold_details'],  # Sale dates and quantities
+                "TotGrossAmtPaidCredited": 0,  # Will be calculated below
                 "TotGrossProceeds": int(proceeds_inr)  # For SOLD shares
             })
 
-        # 4. Process Unvested RSUs (Beneficial Interest) - OPTIONAL
+        # 4. Calculate dividends per lot based on holdings on dividend payment date
+        print("\n[*] Calculating dividends per lot...")
+        if dividend_transactions:
+            for div in dividend_transactions:
+                div_symbol = div['symbol']
+                div_date = div['date']
+                div_amount_inr = div['amount_inr']
+
+                print(f"\n  Dividend: {div_symbol} on {div_date} - INR {div_amount_inr:,.2f}")
+
+                # Find all lots of this symbol that were held on dividend date
+                lots_held = []
+                for tranche in equity_tranches:
+                    if 'Beneficial Interest' in tranche['NatureOfEntity']:
+                        continue  # Skip unvested
+
+                    # Extract symbol from NameOfEntity (or use stored symbol)
+                    # For now, check if this is the right symbol (AMD, etc.)
+                    tranche_symbol = div_symbol  # Assuming single symbol for now
+
+                    acq_date = tranche['InterestAcquiringDate']
+
+                    # Check if this lot was held on dividend date
+                    if acq_date <= div_date:
+                        # Check if sold before dividend date
+                        was_sold_before_div = False
+                        shares_on_div_date = tranche['_total_qty']
+
+                        # Check sold details
+                        for sale in tranche['_sold_details']:
+                            if sale['sell_date'] <= div_date:
+                                # Sold before or on dividend date - reduce shares
+                                shares_on_div_date -= sale['qty']
+                                if shares_on_div_date == 0:
+                                    was_sold_before_div = True
+                                    break
+
+                        if not was_sold_before_div and shares_on_div_date > 0:
+                            lots_held.append({
+                                'tranche': tranche,
+                                'shares': shares_on_div_date
+                            })
+
+                # Calculate total shares held on dividend date
+                total_shares_on_div_date = sum(lot['shares'] for lot in lots_held)
+
+                if total_shares_on_div_date == 0:
+                    print(f"    WARNING: No shares held on {div_date} for {div_symbol}")
+                    continue
+
+                print(f"    Total shares held on {div_date}: {total_shares_on_div_date}")
+
+                # Allocate dividend proportionally to each lot
+                for lot_info in lots_held:
+                    tranche = lot_info['tranche']
+                    shares = lot_info['shares']
+
+                    # Calculate this lot's share of dividend
+                    lot_dividend = round((shares / total_shares_on_div_date) * div_amount_inr, 2)
+
+                    # Add to existing dividend (in case of multiple dividend payments)
+                    tranche['TotGrossAmtPaidCredited'] += lot_dividend
+
+                    print(f"      {tranche['NatureOfEntity']:40s} | {shares:3d} shares | INR {lot_dividend:,.2f}")
+
+        else:
+            print("  No dividend transactions found")
+
+        # 5. Process Unvested RSUs (Beneficial Interest) - OPTIONAL
         # Per ITRFA.in: "conservative practice; some CAs defer until vesting"
         # Controlled by config.json: "disclose_unvested_rsu" (default: false)
         config = load_config()

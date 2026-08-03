@@ -63,7 +63,7 @@ The tool processes dividend income for COMPLETE ITR-2 filing:
 
 **Schedule FA (Asset Disclosure):**
 - **Table A2:** Creates separate rows for dividends and sales
-- **Table A3:** Assigns dividend once per symbol (first lot)
+- **Table A3:** Allocates dividend proportionally to each lot based on holdings on dividend payment date
 - **Exchange Rate:** Exact credit date TTBR (per CBDT)
 
 **Schedule OS (Other Sources Income):**
@@ -85,8 +85,16 @@ The tool processes dividend income for COMPLETE ITR-2 filing:
 
 **AMD Note:** AMD doesn't pay dividends, so this is optional for AMD employees
 
+**Dividend Allocation Logic:**
+- Each lot receives dividend proportionally based on shares held on dividend payment date
+- Handles partial sales: reduces shares if sold before dividend date
+- Supports multiple dividend payments: accumulates per lot
+- Example: If Lot A has 10 shares and Lot B has 20 shares on dividend date, and total dividend is $30:
+  - Lot A gets: (10/30) × $30 = $10
+  - Lot B gets: (20/30) × $30 = $20
+
 **Documentation:**
-- **Schedule FA dividends:** [docs/dividends.md](docs/dividends.md)
+- **Schedule FA dividends (with per-lot allocation):** [docs/dividends.md](docs/dividends.md)
 - **Schedule OS & FSI:** [docs/schedule_os_fsi.md](docs/schedule_os_fsi.md)
 
 ### ✅ Tax Withholding: Net Share Settlement vs Sell-to-Cover

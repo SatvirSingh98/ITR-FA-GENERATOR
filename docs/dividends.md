@@ -83,19 +83,48 @@ Row 1:
 
 ### Table A3 (Per Holding)
 
-**Rule:** Enter dividend **ONCE** per symbol (on the first lot), not split across all lots
+**Rule:** Allocate dividend **PROPORTIONALLY** to each lot based on shares held on dividend payment date
+
+**Algorithm:**
+```
+For each dividend payment:
+  1. Find all lots acquired ON OR BEFORE dividend date
+  2. Calculate shares held in each lot on dividend date
+     (subtract shares sold before dividend)
+  3. Calculate total shares across all lots
+  4. Allocate: lot_dividend = (lot_shares / total_shares) × dividend
+```
 
 **Example:**
 ```
 Symbol: AMD
-Total dividend for AMD: ₹10,080
-Holdings:
-  - Lot 1 (RSU, 10 shares): ₹10,080 in TotGrossAmtPaidCredited ← First lot gets dividend
-  - Lot 2 (RSU, 8 shares): ₹0 in TotGrossAmtPaidCredited
-  - Lot 3 (ESPP, 6 shares): ₹0 in TotGrossAmtPaidCredited
+Dividend: $120 on March 15, 2025 (TTBR 84.00 = ₹10,080)
+
+Holdings on March 15, 2025:
+  - Lot A (RSU, 10 shares): Acquired Jan 15, 2025 → 10 shares held
+  - Lot B (RSU, 20 shares): Acquired Feb 10, 2025 → 20 shares held  
+  - Lot C (ESPP, 30 shares): Acquired Aug 5, 2025 → 0 shares (not vested yet)
+  Total: 30 shares
+
+Allocation:
+  - Lot A: (10/30) × ₹10,080 = ₹3,360
+  - Lot B: (20/30) × ₹10,080 = ₹6,720
+  - Lot C: (0/30) × ₹10,080 = ₹0
+  
+Verification: ₹3,360 + ₹6,720 + ₹0 = ₹10,080 ✓
 ```
 
-**Why?** Per ITRFA.in guidance: "Dividend belongs to the holding (symbol), not individual lots"
+**Handles Partial Sales:**
+```
+If Lot A sold 5 shares on Feb 20 (before March 15 dividend):
+  - Lot A held on March 15: 10 - 5 = 5 shares
+  - Total shares: 5 + 20 + 0 = 25 shares
+  - Lot A gets: (5/25) × ₹10,080 = ₹2,016
+```
+
+**Multiple Dividends:**
+- Each dividend is allocated separately based on holdings on THAT dividend date
+- Lot dividends accumulate across multiple payments
 
 ---
 
@@ -238,17 +267,22 @@ Row 2:
 
 **Table A3 (AMD holdings):**
 ```
+Assume all 3 lots held for all 4 quarterly dividends:
+  Total shares: 10 + 8 + 6 = 24 shares
+
 Lot 1 (RSU, 10 shares):
-  TotGrossAmtPaidCredited: ₹40,680  ← All dividend goes to first lot
+  TotGrossAmtPaidCredited: (10/24) × ₹40,680 = ₹16,950
   TotGrossProceeds: ₹0
 
 Lot 2 (RSU, 8 shares):
-  TotGrossAmtPaidCredited: ₹0       ← No dividend (already assigned)
+  TotGrossAmtPaidCredited: (8/24) × ₹40,680 = ₹13,560
   TotGrossProceeds: ₹0
 
 Lot 3 (ESPP, 6 shares):
-  TotGrossAmtPaidCredited: ₹0       ← No dividend (already assigned)
-  TotGrossProceeds: ₹1,72,200       ← This lot was sold
+  TotGrossAmtPaidCredited: (6/24) × ₹40,680 = ₹10,170
+  TotGrossProceeds: ₹1,72,200      ← This lot was sold
+
+Verification: ₹16,950 + ₹13,560 + ₹10,170 = ₹40,680 ✓
 ```
 
 **Dividend Transactions Sheet:**
@@ -287,12 +321,17 @@ AMD    | 2025-12-15 | 120.00       | 85.50 | 10,260
 ```
 **Status:** Normal - tool automatically finds preceding working day
 
-### Dividend on First vs Later Lots
+### Dividend Allocation Per Lot
 **Expected behavior:** 
-- First lot of each symbol gets the dividend
-- Later lots show ₹0 in TotGrossAmtPaidCredited
+- Each lot gets dividend proportional to shares held on dividend date
+- Output shows allocation per lot during execution
 ```
-[i] Assigning ₹40,680 dividend to first AMD lot (RSU (10 shares))
+[*] Calculating dividends per lot...
+  Dividend: AMD on 2025-03-15 - INR 10,080.00
+    Total shares held on 2025-03-15: 24
+      RSU (10 shares)  | 10 shares | INR 4,200.00
+      RSU (8 shares)   |  8 shares | INR 3,360.00
+      ESPP (6 shares)  |  6 shares | INR 2,520.00
 ```
 
 ---
@@ -319,8 +358,9 @@ AMD    | 2025-12-15 | 120.00       | 85.50 | 10,260
 ✅ **Schedule FA dividend handling:**
 - Use exact credit date TTBR
 - Create separate A2 row if both dividends and sales exist
-- Assign dividend once per symbol (first lot) in A3
-- Same dividend appears in both A2 and A3 (correct!)
+- Allocate dividend proportionally to each lot based on holdings on dividend date
+- Handles partial sales and multiple dividend payments
+- Same dividend total appears in both A2 and A3 (correct!)
 
 ❌ **Out of scope:**
 - Schedule OS (income tax calculation)
