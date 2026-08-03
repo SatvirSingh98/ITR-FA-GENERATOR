@@ -969,9 +969,14 @@ class ScheduleFAApp:
         # Build valuation matrix - use ALL US trading days
         # Per Indian tax law (Rule 115): when SBI rate unavailable (weekend/holiday),
         # use the last preceding trading day's rate
+
+        # Remove duplicates from stock data and SBI data before merge (keep last occurrence)
+        df_stock_clean = df_stock[['Date', 'Stock_Close_USD']].drop_duplicates(subset=['Date'], keep='last')
+        df_sbi_clean = self.df_sbi[['Date', 'TTBR']].drop_duplicates(subset=['Date'], keep='last')
+
         df_matrix = pd.merge(
-            df_stock[['Date', 'Stock_Close_USD']],
-            self.df_sbi[['Date', 'TTBR']],
+            df_stock_clean,
+            df_sbi_clean,
             on='Date',
             how='left'  # LEFT join = keep all US trading days, even if SBI rate missing
         )
