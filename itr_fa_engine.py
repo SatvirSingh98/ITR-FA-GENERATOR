@@ -2439,7 +2439,7 @@ class ScheduleFAApp:
             from openpyxl.utils import get_column_letter
 
             # Color scheme
-            header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")  # Dark blue
+            header_fill = PatternFill(start_color="00695C", end_color="00695C", fill_type="solid")  # Dark teal
             header_font = Font(bold=True, color="FFFFFF", size=11)  # White bold
             alt_row_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")  # Light gray
             total_fill = PatternFill(start_color="FFC000", end_color="FFC000", fill_type="solid")  # Orange
