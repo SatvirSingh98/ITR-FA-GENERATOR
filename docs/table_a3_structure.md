@@ -1,20 +1,39 @@
-# Table A3 Structure - One Row Per Acquisition Date
+# Table A3 Structure - Multiple Rows for Partial Sales
 
 ## Overview
-Table A3 (Equity Interest) in Schedule FA uses **ONE row per acquisition date (lot)**, NOT separate rows for sold vs holding portions.
+Table A3 (Equity Interest) in Schedule FA uses **MULTIPLE rows for the same acquisition date** when there is a partial sale.
 
-**Source:** ITR e-filing portal validation, ITRFA.in guidance
+**Source:** Email clarification from ITRFA.in (2026-08-03)
 
 ---
 
-## The Rule: One Row Per Lot
+## The Rule: Separate Rows for Partial Sales
 
-**Each acquisition date = ONE row, with:**
-- **Initial Value of Investment**: Total value for ALL shares originally acquired (sold + holding)
-- **Closing Balance**: Value of shares STILL HOLDING from that lot (as of Dec 31)
-- **Gross Proceeds**: Proceeds from shares SOLD from that lot (in calendar year)
+**When a lot is partially sold, create TWO separate rows:**
 
-**Key Insight:** Both "Closing Balance" and "Gross Proceeds" can be NON-ZERO in the SAME row (partial sale)
+1. **Row for shares STILL HOLDING:**
+   - **Initial Value**: Value of shares currently holding
+   - **Peak Balance**: Peak value of shares currently holding
+   - **Closing Balance**: Value of shares on Dec 31 (non-zero)
+   - **Gross Proceeds**: ₹0
+
+2. **Row for shares SOLD:**
+   - **Initial Value**: Value of sold shares (at acquisition)
+   - **Peak Balance**: Peak value of sold shares (before sale)
+   - **Closing Balance**: ₹0 (no longer holding)
+   - **Gross Proceeds**: Actual sale proceeds
+
+**Key Insight:** The two portions have genuinely different peak and closing values through the year. Combining them into one row would misstate both values.
+
+---
+
+## ITRFA.in Official Guidance (2026-08-03)
+
+### Question Asked:
+"I see that in A3 you have mentioned multiple rows for the shares with acquisition date of 2024-11-08 as there was partial sale for this, is this format correct? I thought like we need to have only one row per acquisition date per entity type and if there is any sale then we need to decrease the shares, correct the peak value and then provide the gross proceeds."
+
+### ITRFA.in Answer:
+"**Multiple A3 rows for the same acquisition date — yes, correct, and intentional.** A holding acquired on one date but partly sold shows as two separate Table A3 rows: one for the shares still held (closing value = your Dec 31 balance) and one for the shares sold (closing value = 0, gross proceeds shown). **We never collapse these into a single row with a reduced share count, because the two portions have genuinely different peak and closing values through the year — combining them would misstate both.**"
 
 ---
 
@@ -22,97 +41,31 @@ Table A3 (Equity Interest) in Schedule FA uses **ONE row per acquisition date (l
 
 ### Scenario
 - **Acquisition**: Nov 8, 2024 - 11 ESPP shares @ $147.95/share
-- **Sale**: Sold 5 shares in May 2026 for $451.11 total
+- **Sale**: Sold 5 shares on Aug 15, 2025 for $451.11 total
 - **Holding**: Still holding 6 shares as of Dec 31, 2025
 
-### WRONG Approach (OLD CODE - 2 rows)
+### CORRECT Approach (TWO rows)
 ```
-Row 1: ESPP (6 shares)  | Acq: Nov 8, 2024 | Initial: ₹88,929  | Closing: ₹210,770 | Proceeds: ₹0
-Row 2: ESPP (5 shares)  | Acq: Nov 8, 2024 | Initial: ₹74,108  | Closing: ₹0       | Proceeds: ₹201,805
-```
-**Problem:** TWO rows for same acquisition date (split by current status)
+Row 1: ESPP (6 shares)
+  - Acq Date: Nov 8, 2024
+  - Initial Value: ₹88,929    (6 shares × $147.95 × 83.15 TTBR)
+  - Peak Balance: ₹XXX,XXX     (6 shares × peak price)
+  - Closing Balance: ₹210,770  (6 shares × $147.95 × 89.47 TTBR)
+  - Gross Proceeds: ₹0
 
-### CORRECT Approach (NEW CODE - 1 row)
-```
-Row 1: ESPP (11 shares) | Acq: Nov 8, 2024 | Initial: ₹163,037 | Closing: ₹210,770 | Proceeds: ₹201,805
-```
-**Correct:** ONE row for the acquisition date, shows BOTH holding AND sold portions
-
----
-
-## Field Calculations
-
-### Initial Value of Investment
-**Definition:** Total value of ALL shares originally acquired from this lot
-
-**Formula:**
-```python
-total_original_shares = shares_holding + shares_sold
-initial_value = total_original_shares × unit_cost_usd × acq_date_ttbr
+Row 2: ESPP (5 shares) Sold
+  - Acq Date: Nov 8, 2024
+  - Initial Value: ₹74,108    (5 shares × $147.95 × 83.15 TTBR)
+  - Peak Balance: ₹XXX,XXX     (5 shares × peak price before sale)
+  - Closing Balance: ₹0        (no longer holding)
+  - Gross Proceeds: ₹201,805   (actual sale proceeds)
 ```
 
-**Example:**
-- 11 shares @ $147.95 × 83.15 TTBR = ₹1,63,037
+**Why TWO rows:** The 6 holding shares and 5 sold shares have different peak values:
+- Holding shares: Peak anytime in the year
+- Sold shares: Peak only UP TO sale date (Aug 15)
 
-### Closing Balance
-**Definition:** Value of shares STILL HOLDING from this lot as of Dec 31
-
-**Formula:**
-```python
-closing_value = shares_still_holding × unit_cost_usd × dec31_ttbr
-```
-
-**Example:**
-- 6 shares (still holding) @ $147.95 × 89.47 TTBR = ₹2,10,770
-
-### Gross Proceeds
-**Definition:** Proceeds from shares SOLD from this lot in the calendar year
-
-**Formula:**
-```python
-proceeds_inr = sum(sale_proceeds_usd × sale_date_ttbr) for all sales from this lot
-```
-
-**Example:**
-- 5 shares sold for $451.11 × 89.47 TTBR = ₹2,01,805
-- Note: If sold in 2026, proceeds would be 0 for 2025 Table A3
-
----
-
-## Implementation Details
-
-### Grouping Key
-Lots are grouped by:
-```python
-key = (symbol, acq_date, plan_type)
-```
-
-**Example:**
-- (AMD, 2024-11-08, ESPP) → All ESPP shares from Nov 8, 2024
-- (AMD, 2025-09-15, Rest. Stock) → All RSU shares from Sep 15, 2025
-
-### Data Sources
-1. **Sellable sheet (ByStatus_expanded.xlsx)**: Shares currently holding
-2. **G&L_Expanded.xlsx (current FY)**: Shares sold in calendar year
-3. **G&L_Expanded.xlsx (future)**: Shares to be sold after FY (still holding now)
-
-### Consolidation Logic
-```python
-for each lot_group:
-    total_qty = open_qty + sold_qty
-    
-    # Initial value for ALL original shares
-    initial_val = calculate_value(total_qty, acq_date)
-    
-    # Closing balance for REMAINING shares only
-    if open_qty > 0:
-        close_val = calculate_value(open_qty, dec_31)
-    else:
-        close_val = 0
-    
-    # Proceeds for SOLD shares only
-    proceeds = sum(sold_details.proceeds_inr)
-```
+If stock price peaked AFTER Aug 15, the two groups have genuinely different peak values!
 
 ---
 
@@ -124,7 +77,7 @@ Acquisition: 17 shares on May 9, 2025
 Sale: None
 Holding: 17 shares
 
-Table A3 Row:
+Table A3: ONE row
 - Nature: ESPP (17 shares)
 - Initial Value: ₹1,49,128
 - Closing Balance: ₹3,25,735 (all 17 shares)
@@ -137,8 +90,8 @@ Acquisition: 10 shares on Mar 15, 2025
 Sale: All 10 shares sold on Aug 20, 2025
 Holding: 0 shares
 
-Table A3 Row:
-- Nature: RSU (10 shares)
+Table A3: ONE row
+- Nature: RSU (10 shares) Sold
 - Initial Value: ₹1,50,000
 - Closing Balance: ₹0
 - Gross Proceeds: ₹3,20,000 (all 10 shares)
@@ -150,11 +103,21 @@ Acquisition: 11 shares on Nov 8, 2024
 Sale: 5 shares sold on Aug 15, 2025
 Holding: 6 shares
 
-Table A3 Row:
-- Nature: ESPP (11 shares)        ← Shows TOTAL original
-- Initial Value: ₹1,63,037         ← For ALL 11 shares
-- Closing Balance: ₹2,10,770       ← For 6 shares holding
-- Gross Proceeds: ₹2,01,805        ← For 5 shares sold
+Table A3: TWO rows
+
+Row 1 (Holding portion):
+- Nature: ESPP (6 shares)
+- Initial Value: ₹88,929          ← For 6 shares only
+- Peak Balance: ₹XXX,XXX           ← Peak of 6 shares (anytime in year)
+- Closing Balance: ₹210,770        ← 6 shares on Dec 31
+- Gross Proceeds: ₹0
+
+Row 2 (Sold portion):
+- Nature: ESPP (5 shares) Sold
+- Initial Value: ₹74,108          ← For 5 shares only
+- Peak Balance: ₹YYY,YYY           ← Peak of 5 shares (up to Aug 15 only)
+- Closing Balance: ₹0
+- Gross Proceeds: ₹201,805
 ```
 
 ### Case 4: Future Sale (Sold After FY)
@@ -163,57 +126,160 @@ Acquisition: 11 shares on Nov 8, 2024
 Sale: 5 shares to be sold on May 8, 2026 (FUTURE)
 Holding: 11 shares as of Dec 31, 2025
 
-Table A3 Row (for FY 2025-26):
-- Nature: ESPP (11 shares)         ← Shows TOTAL (includes future-sold)
-- Initial Value: ₹1,63,037         ← For ALL 11 shares
-- Closing Balance: ₹2,10,770       ← For ALL 11 shares (still holding Dec 31)
-- Gross Proceeds: ₹0               ← Nothing sold in THIS calendar year
+Table A3 (for FY 2025-26): ONE row
+- Nature: ESPP (11 shares) - Sold       ← Marked as future-sold
+- Initial Value: ₹1,63,037               ← For ALL 11 shares
+- Closing Balance: ₹2,10,770             ← ALL 11 shares (still holding Dec 31)
+- Gross Proceeds: ₹0                     ← Nothing sold in THIS calendar year
 
 Note: When those 5 shares actually sell in May 2026:
 - They appear in Capital Gains for FY 2025-26 (advance tax planning)
-- They'll reduce closing balance in FY 2026-27 Table A3
+- They'll create TWO rows in FY 2026-27 Table A3 (6 holding, 5 sold)
 ```
 
 ---
 
-## Why This Matters
+## Why Separate Rows Matter
 
-### Problem with Old Approach (2 rows)
-1. **ITR Portal Rejection**: Portal may reject duplicate acquisition dates
-2. **Confusing Nature**: "ESPP (6 shares)" and "ESPP (5 shares)" don't indicate same lot
-3. **Initial Value Wrong**: Split across two rows instead of showing total lot value
-4. **FIFO Unclear**: Can't see that 5 sold shares came from an 11-share lot
+### Problem with One Consolidated Row (WRONG)
+If we combined partial sale into ONE row:
+```
+WRONG: ESPP (11 shares) | Initial: ₹163,037 | Closing: ₹210,770 | Proceeds: ₹201,805
+```
 
-### Benefits of New Approach (1 row)
-1. **Portal Compliant**: One row per acquisition date
-2. **Clear Lot Tracking**: Shows total lot size in nature
-3. **Correct Initial Value**: Reflects full original investment
-4. **FIFO Visible**: Can see partial sale from original lot
-5. **Matches E*TRADE**: E*TRADE shows lots by acquisition date
+**Issues:**
+1. **Closing balance ₹210,770 for 11 shares?** No! Only 6 shares are held on Dec 31.
+2. **Peak value unclear:** Did all 11 shares reach peak, or only the 6 holding shares?
+3. **Misrepresents reality:** Makes it look like 11 shares are still held + sold proceeds received
+
+### Benefits of Separate Rows (CORRECT)
+1. **Accurate Peak Values:** Each row shows correct peak for that portion
+2. **Clear Closing Balance:** 6 shares = ₹210,770, 5 shares = ₹0
+3. **Transparent FIFO:** Can see partial sale from original lot
+4. **Matches Tax Reality:** Different peak dates = different valuations
+
+---
+
+## Peak Value Calculation Difference
+
+**Critical difference for partial sales:**
+
+**Holding shares (Row 1):**
+- Peak can occur ANYTIME in the calendar year (Jan 1 - Dec 31)
+- Example: If stock peaked on Nov 15, these shares get that peak value
+
+**Sold shares (Row 2):**
+- Peak can occur ONLY from acquisition date to sale date
+- Example: If sold on Aug 15, peak is ONLY up to Aug 15
+- Any price increase AFTER Aug 15 does NOT count for sold shares
+
+**Example:**
+- Acquisition: Jan 1, 2025 - 10 shares @ $100
+- Partial sale: Aug 15, 2025 - sold 5 shares when price = $150
+- Dec 31 price: $200
+- Peak price for YEAR: $220 on Nov 15
+
+**Correct peak values:**
+- **Holding 5 shares:** 5 × $220 × TTBR = ₹XXX (peak on Nov 15)
+- **Sold 5 shares:** 5 × $150 × TTBR = ₹YYY (peak up to Aug 15 only, NOT $220!)
+
+**If we consolidated:** Would incorrectly use $220 for all 10 shares!
+
+---
+
+## FIFO Handling
+
+### Question to ITRFA.in:
+"As per Indian Law FIFO is there right like if we sell any share the oldest will go first, is it the same case here also?"
+
+### ITRFA.in Answer:
+"**FIFO — we use ETRADE's own Gains & Losses export as the source of which lot was sold.** That report already reflects whichever lot-relief method ETRADE itself applied when the sale executed. **We don't re-derive or override the lot order on top of it.**"
+
+**Implementation:**
+- Use E*TRADE's G&L_Expanded.xlsx acquisition dates AS-IS
+- Don't re-calculate FIFO ourselves
+- E*TRADE has already applied the correct lot-relief method
+
+---
+
+## Dividend Allocation for Partial Sales
+
+### Question to ITRFA.in:
+"For dividend handling: In your example, you put the $120 dividend on Lot 2 (the lot still held on Dec 31), with Lot 1 getting $0 since it was sold. My question is what if the dividend was paid BEFORE the Lot 1 was sold?"
+
+### ITRFA.in Answer:
+"**Dividend timing — the dividend goes to whichever lot(s) were actually held of record on the date the dividend was declared/paid, not whichever lot is still open on Dec 31.** In your example, the March dividend goes entirely to Lot 1, even though Lot 1 later shows a $0 closing balance from the June sale — that's expected, not an error. **If more than one lot is held of record on a dividend's date, the amount is split across them in proportion to shares held, not assigned to one row.**"
+
+**Example:**
+```
+March 2025: Dividend $150 paid (only Lot 1 existed with 100 shares)
+June 2025: Sold all Lot 1 shares (closing balance = 0)
+Aug 2025: Lot 2 vested (50 shares)
+Dec 31: Only Lot 2 held
+
+Dividend allocation:
+- Lot 1 (SOLD): TotGrossAmtPaidCredited = ₹12,600 (entire dividend)
+                Closing Balance = ₹0
+- Lot 2 (HOLDING): TotGrossAmtPaidCredited = ₹0 (didn't exist on dividend date)
+                   Closing Balance = ₹XXX
+
+This is CORRECT! Dividend stays with the lot that held shares on payment date.
+```
+
+**Implementation:** Our code already handles this correctly (lines 1436-1500).
 
 ---
 
 ## Code Location
 **File:** `itr_fa_engine.py`  
-**Lines:** 1232-1340 (lot collection and consolidation)
+**Lines:** 1244-1400 (separate row creation for open/sold/future-sold lots)
 
-**Key Functions:**
-- Lines 1248-1281: Parse open lots (Sellable sheet)
-- Lines 1283-1330: Parse sold lots (G&L current FY)
-- Lines 1332-1363: Parse future-sold lots (G&L future)
-- Lines 1365-1412: Consolidate lot_groups into equity_tranches
-
----
-
-## Verification
-To verify correct Table A3 structure:
-1. Check Table A3 sheet in Excel output
-2. For each acquisition date, should see ONLY ONE row
-3. If partial sale: Both ClosingBalance > 0 AND TotGrossProceeds > 0
-4. NatureOfEntity should show TOTAL original shares (not just holding)
-5. Initial Value should be for ALL shares (sold + holding)
+**Key Sections:**
+- Lines 1252-1294: Parse open lots (shares still holding) → ONE row per lot
+- Lines 1296-1349: Parse sold lots (sold in calendar year) → ONE row per lot with "Sold" suffix
+- Lines 1351-1400: Parse future-sold lots (sold after FY) → ONE row per lot with "- Sold" suffix
 
 ---
 
-**Last Updated:** 2026-08-02
-**Related Docs:** [closed_lots_verification.md](closed_lots_verification.md), [capital_gains.md](capital_gains.md)
+## Verification Checklist
+
+To verify correct Table A3 structure in Excel output:
+
+1. ✅ **Partial sale creates TWO rows** (same acquisition date)
+   - Row 1: "ESPP (X shares)" with closing balance > 0
+   - Row 2: "ESPP (Y shares) Sold" with closing balance = 0
+
+2. ✅ **Different peak values** for holding vs sold portions
+   - Holding: Peak can be AFTER sale date
+   - Sold: Peak is ONLY up to sale date
+
+3. ✅ **Correct initial values** (separate for each row)
+   - Holding row: Initial value for X shares
+   - Sold row: Initial value for Y shares
+   - Total: X + Y = original lot size
+
+4. ✅ **Dividend allocation** matches dividend payment date
+   - If dividend paid BEFORE sale: Goes to sold lot (even if closing = 0)
+   - If dividend paid AFTER sale: Goes to holding lot
+   - Multiple lots on dividend date: Split proportionally
+
+---
+
+## Summary
+
+**CORRECT:**
+- ✅ Partial sale = **TWO separate rows** (one holding, one sold)
+- ✅ Each row has **different peak and closing values**
+- ✅ **Never** consolidate into single row
+- ✅ Dividend goes to lot **held on dividend date** (not based on Dec 31 closing)
+- ✅ Use E*TRADE's lot matching from G&L export (don't re-derive FIFO)
+
+**WRONG:**
+- ❌ One row per acquisition date with reduced share count
+- ❌ Combining peak values from holding and sold portions
+- ❌ Assigning dividend based on closing balance instead of dividend payment date
+
+---
+
+**Last Updated:** 2026-08-03 (ITRFA.in email clarification)  
+**Related Docs:** [closed_lots_verification.md](closed_lots_verification.md), [dividends.md](dividends.md), [capital_gains.md](capital_gains.md)

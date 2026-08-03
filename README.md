@@ -119,24 +119,32 @@ The tool processes dividend income for COMPLETE ITR-2 filing:
 **Documentation:** [docs/closed_lots_verification.md](docs/closed_lots_verification.md)  
 **Source:** [ITRFA.in Sell-to-Cover Guide](https://itrfa.in/blog/schedule-fa-sell-to-cover-capital-gains)
 
-### ✅ Table A3: One Row Per Acquisition Date (Partial Sales)
+### ✅ Table A3: Multiple Rows for Partial Sales
 
-**CRITICAL FIX:** Tool now correctly creates ONE row per acquisition date in Table A3, even for partial sales.
+Partial sales create **TWO separate rows** with different peak and closing values.
 
 **Example - Partial Sale:**
 - Acquired: 11 ESPP shares on Nov 8, 2024
-- Sold: 5 shares in May 2026
+- Sold: 5 shares on Aug 15, 2025
 - Holding: 6 shares as of Dec 31, 2025
 
-**Output: ONE row showing:**
-- Nature: "ESPP (11 shares)" (total original)
-- Initial Value: ₹1,63,037 (for all 11 shares)
-- Closing Balance: ₹2,10,770 (for 6 shares still holding)
-- Gross Proceeds: ₹0 (nothing sold in this calendar year)
+**Output: TWO rows showing:**
 
-**Previous behavior (WRONG):** Created TWO rows - one for 6 holding shares, one for 5 sold shares
+**Row 1 (Holding):**
+- Nature: "ESPP (6 shares)"
+- Initial Value: ₹88,929 (for 6 shares)
+- Peak Balance: Peak value of 6 shares (anytime in year)
+- Closing Balance: ₹2,10,770 (6 shares on Dec 31)
+- Gross Proceeds: ₹0
 
-**ITR Portal Requirement:** ONE row per acquisition date, can have BOTH closing balance AND proceeds in same row
+**Row 2 (Sold):**
+- Nature: "ESPP (5 shares) Sold"
+- Initial Value: ₹74,108 (for 5 shares)
+- Peak Balance: Peak value of 5 shares (up to Aug 15 only)
+- Closing Balance: ₹0
+- Gross Proceeds: ₹2,01,805
+
+**Why separate rows?** The two portions have genuinely different peak and closing values. Combining them would misstate both.
 
 **Documentation:** [docs/table_a3_structure.md](docs/table_a3_structure.md)
 

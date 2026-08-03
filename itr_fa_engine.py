@@ -1244,17 +1244,13 @@ class ScheduleFAApp:
         equity_tranches = []
 
         # =====================================================================
-        # CRITICAL FIX: Group by acquisition date for Table A3
-        # Per ITR portal: ONE row per acquisition date (lot)
-        # - Closing balance = shares still holding from that lot
-        # - Proceeds = shares sold from that lot
-        # - Both can be non-zero in the SAME row (partial sale)
+        # Table A3 Structure: SEPARATE ROWS for partial sales
+        # - Partial sale = TWO separate rows (one for holding, one for sold)
+        # - Each row has genuinely different peak and closing values
+        # - NEVER consolidate into single row with reduced share count
         # =====================================================================
 
-        # Step 1: Collect all lots (open + sold) with their acquisition dates
-        lot_groups = {}  # Key: (symbol, acq_date, plan_type) → Value: {open_qty, sold_qty, unit_cost, proceeds, etc.}
-
-        # 1. Parse Open Lots (Unsold shares) - GROUP BY ACQ DATE
+        # 1. Parse Open Lots (Unsold shares) - SEPARATE ROW for each
         for _, row in df_open.iterrows():
             qty = int(row['Sellable Qty.'])
             if qty == 0:
@@ -1266,153 +1262,18 @@ class ScheduleFAApp:
                 continue
 
             symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+            comp_info = self.get_company_details(symbol)
+
             plan_type = str(row['Plan Type'])
+            nature_prefix = "ESPP" if "ESPP" in plan_type else "RSU"
+            nature = f"{nature_prefix} ({qty} shares)" if qty != 1 else f"{nature_prefix} ({qty} share)"
 
             # Use Purchase Date FMV for initial value
             purchase_fmv_str = str(row['Purchase Date FMV']).replace('$', '').replace(',', '').strip()
             unit_cost = float(purchase_fmv_str) if purchase_fmv_str and purchase_fmv_str != '--' else float(row['Est. Cost Basis (per share):'])
 
-            # Group key: (symbol, acq_date, plan_type)
-            key = (symbol, acq_date, plan_type)
+            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
 
-            if key not in lot_groups:
-                lot_groups[key] = {
-                    'symbol': symbol,
-                    'acq_date': acq_date,
-                    'plan_type': plan_type,
-                    'unit_cost': unit_cost,
-                    'open_qty': 0,
-                    'sold_qty': 0,
-                    'proceeds_inr': 0,
-                    'sold_details': []  # For capital gains tracking
-                }
-
-            lot_groups[key]['open_qty'] += qty
-
-        # 2. Parse Sold Lots (Actually sold WITHIN this FY) - GROUP BY ACQ DATE
-        for _, row in df_sold.iterrows():
-            qty = int(row['Quantity'])
-            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
-            plan_type = str(row.get('Plan Type', ''))
-
-            acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
-            sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
-
-            # CRITICAL: Use correct FMV per Section 49(2AA)
-            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
-            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
-                unit_cost = float(row['Purchase Date Fair Mkt. Value'])
-            else:
-                unit_cost = float(row['Adjusted Cost Basis Per Share'])
-
-            proceeds_usd = float(row['Total Proceeds'])
-
-            # Get TTBR for sale proceeds
-            comp_info = self.get_company_details(symbol)
-            df_matrix = comp_info["matrix"]
-            sell_row = df_matrix[df_matrix['Date'] == sell_date]
-            sell_ttbr = sell_row['TTBR'].values[0] if not sell_row.empty else 89.47
-            proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
-
-            # Group key: (symbol, acq_date, plan_type)
-            key = (symbol, acq_date, plan_type)
-
-            if key not in lot_groups:
-                lot_groups[key] = {
-                    'symbol': symbol,
-                    'acq_date': acq_date,
-                    'plan_type': plan_type,
-                    'unit_cost': unit_cost,
-                    'open_qty': 0,
-                    'sold_qty': 0,
-                    'proceeds_inr': 0,
-                    'sold_details': []
-                }
-
-            lot_groups[key]['sold_qty'] += qty
-            lot_groups[key]['proceeds_inr'] += proceeds_inr
-            lot_groups[key]['sold_details'].append({
-                'qty': qty,
-                'sell_date': sell_date,
-                'proceeds_usd': proceeds_usd,
-                'proceeds_inr': proceeds_inr
-            })
-
-        # 3. Parse Future-Sold Lots (Sold AFTER this FY) - ADD TO OPEN_QTY
-        # These shares were acquired in/before this year but will be sold AFTER this FY
-        # For Table A3 THIS year: They're still HOLDING (closing balance > 0)
-        # They'll appear as SOLD in next year's Table A3
-        for _, row in df_sold_future.iterrows():
-            qty = int(row['Quantity'])
-            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
-            plan_type = str(row.get('Plan Type', ''))
-
-            acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
-
-            # CRITICAL: Use correct FMV per Section 49(2AA)
-            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
-            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
-                unit_cost = float(row['Purchase Date Fair Mkt. Value'])
-            else:
-                unit_cost = float(row['Adjusted Cost Basis Per Share'])
-
-            # Group key: (symbol, acq_date, plan_type)
-            key = (symbol, acq_date, plan_type)
-
-            if key not in lot_groups:
-                lot_groups[key] = {
-                    'symbol': symbol,
-                    'acq_date': acq_date,
-                    'plan_type': plan_type,
-                    'unit_cost': unit_cost,
-                    'open_qty': 0,
-                    'sold_qty': 0,
-                    'proceeds_inr': 0,
-                    'sold_details': []
-                }
-
-            # Add to open_qty because shares are still holding as of Dec 31
-            lot_groups[key]['open_qty'] += qty
-
-        # 4. CONSOLIDATE lot_groups into equity_tranches (ONE row per acquisition date)
-        print("\n[*] Consolidating lots by acquisition date for Table A3...")
-        for key, lot in lot_groups.items():
-            symbol = lot['symbol']
-            acq_date = lot['acq_date']
-            plan_type = lot['plan_type']
-            unit_cost = lot['unit_cost']
-            open_qty = lot['open_qty']
-            sold_qty = lot['sold_qty']
-            proceeds_inr = lot['proceeds_inr']
-
-            # Total original shares = still holding + already sold
-            total_qty = open_qty + sold_qty
-
-            comp_info = self.get_company_details(symbol)
-
-            # Determine nature
-            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
-            nature_prefix = "ESPP" if is_espp else "RSU"
-
-            # Nature shows total original shares (not just remaining)
-            nature = f"{nature_prefix} ({total_qty} shares)"
-            if total_qty == 1:
-                nature = f"{nature_prefix} ({total_qty} share)"
-
-            # Calculate values for TOTAL original shares
-            init_val, peak_val, _ = self.calculate_tranche_values(
-                symbol, total_qty, acq_date, unit_cost_usd=unit_cost
-            )
-
-            # Calculate closing balance for REMAINING shares only
-            if open_qty > 0:
-                _, _, close_val = self.calculate_tranche_values(
-                    symbol, open_qty, acq_date, unit_cost_usd=unit_cost
-                )
-            else:
-                close_val = 0
-
-            # Store lot details for dividend calculation (will calculate dividends later)
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
                 "CountryCodeExcludingIndia": 2,
@@ -1421,16 +1282,135 @@ class ScheduleFAApp:
                 "ZipCode": str(comp_info["zip"]),
                 "NatureOfEntity": nature,
                 "InterestAcquiringDate": acq_date,
-                "InitialValOfInvstmnt": init_val,  # For TOTAL original shares
-                "PeakBalanceDuringPeriod": peak_val,  # For TOTAL original shares
-                "ClosingBalance": close_val,  # For REMAINING shares only
+                "InitialValOfInvstmnt": init_val,
+                "PeakBalanceDuringPeriod": peak_val,
+                "ClosingBalance": close_val,
                 "_FMV_USD": unit_cost,
-                "_total_qty": total_qty,  # Store for dividend calculation
-                "_open_qty": open_qty,    # Shares still holding
-                "_sold_qty": sold_qty,     # Shares sold
-                "_sold_details": lot['sold_details'],  # Sale dates and quantities
+                "_total_qty": qty,  # Store for dividend calculation
+                "_open_qty": qty,   # All shares are open (holding)
+                "_sold_qty": 0,
+                "_sold_details": [],
                 "TotGrossAmtPaidCredited": 0,  # Will be calculated below
-                "TotGrossProceeds": int(proceeds_inr)  # For SOLD shares
+                "TotGrossProceeds": 0
+            })
+
+        # 2. Parse Sold Lots (Actually sold WITHIN this FY) - SEPARATE ROW for each
+        # These have: Closing Balance = 0 (no longer holding)
+        #            Gross Proceeds = actual proceeds from sale
+        for _, row in df_sold.iterrows():
+            qty = int(row['Quantity'])
+            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+            comp_info = self.get_company_details(symbol)
+
+            # Determine if it's RSU or ESPP based on Plan Type column
+            plan_type = str(row.get('Plan Type', ''))
+            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
+
+            nature = f"ESPP ({qty} shares) Sold" if is_espp else f"RSU ({qty} shares) Sold"
+            if qty == 1:
+                nature = f"ESPP ({qty} share) Sold" if is_espp else f"RSU ({qty} share) Sold"
+
+            acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
+            sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
+
+            # CRITICAL: Use correct FMV per Section 49(2AA)
+            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                unit_cost = float(row['Purchase Date Fair Mkt. Value'])
+            else:
+                unit_cost = float(row['Adjusted Cost Basis Per Share'])
+
+            proceeds_usd = float(row['Total Proceeds'])
+
+            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, sell_date_str=sell_date, unit_cost_usd=unit_cost)
+
+            df_matrix = comp_info["matrix"]
+            sell_row = df_matrix[df_matrix['Date'] == sell_date]
+            sell_ttbr = sell_row['TTBR'].values[0] if not sell_row.empty else 89.47
+            proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
+
+            equity_tranches.append({
+                "CountryName": "UNITED STATES OF AMERICA",
+                "CountryCodeExcludingIndia": 2,
+                "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
+                "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
+                "ZipCode": str(comp_info["zip"]),
+                "NatureOfEntity": nature,
+                "InterestAcquiringDate": acq_date,
+                "InitialValOfInvstmnt": init_val,
+                "PeakBalanceDuringPeriod": peak_val,
+                "ClosingBalance": close_val,  # 0 because sold
+                "_FMV_USD": unit_cost,
+                "_SaleDate": sell_date,
+                "_GrossProceeds": proceeds_inr,
+                "_total_qty": qty,  # Store for dividend calculation
+                "_open_qty": 0,     # None are open (all sold)
+                "_sold_qty": qty,
+                "_sold_details": [{
+                    'qty': qty,
+                    'sell_date': sell_date,
+                    'proceeds_usd': proceeds_usd,
+                    'proceeds_inr': proceeds_inr
+                }],
+                "TotGrossAmtPaidCredited": 0,  # Will be calculated below
+                "TotGrossProceeds": proceeds_inr
+            })
+
+        # 3. Parse Future-Sold Lots (Held in this FY but sold AFTER FY ends)
+        # These have: Closing Balance = closing value on Dec 31 (still holding)
+        #            Gross Proceeds = 0 (not sold yet in this FY)
+        for _, row in df_sold_future.iterrows():
+            qty = int(row['Quantity'])
+            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+            comp_info = self.get_company_details(symbol)
+
+            plan_type = str(row.get('Plan Type', ''))
+            is_espp = 'ESPP' in plan_type.upper() or 'EMPLOYEE STOCK PURCHASE' in plan_type.upper()
+            nature_prefix = "ESPP" if is_espp else "RSU"
+            nature = f"{nature_prefix} ({qty} shares) - Sold" if qty != 1 else f"{nature_prefix} ({qty} share) - Sold"
+
+            acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
+            sell_date = pd.to_datetime(row['Date Sold']).strftime('%Y-%m-%d')
+
+            # CRITICAL: Use correct FMV per Section 49(2AA)
+            if is_espp and 'Purchase Date Fair Mkt. Value' in row and pd.notna(row['Purchase Date Fair Mkt. Value']):
+                unit_cost = float(row['Purchase Date Fair Mkt. Value'])
+            else:
+                unit_cost = float(row['Adjusted Cost Basis Per Share'])
+
+            proceeds_usd = float(row['Total Proceeds'])
+
+            # Get TTBR for sell date (may need to fetch if not in current year)
+            df_matrix = comp_info["matrix"]
+            sell_row = df_matrix[df_matrix['Date'] == sell_date]
+            if not sell_row.empty:
+                sell_ttbr = sell_row['TTBR'].values[0]
+            else:
+                sell_ttbr = 89.47  # Fallback
+            proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
+
+            # Calculate values WITHOUT sell date (so closing balance is > 0)
+            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
+
+            equity_tranches.append({
+                "CountryName": "UNITED STATES OF AMERICA",
+                "CountryCodeExcludingIndia": 2,
+                "NameOfEntity": self.clean_text_for_itr(comp_info["name"]),
+                "AddressOfEntity": self.clean_text_for_itr(comp_info["address"]),
+                "ZipCode": str(comp_info["zip"]),
+                "NatureOfEntity": nature,
+                "InterestAcquiringDate": acq_date,
+                "InitialValOfInvstmnt": init_val,
+                "PeakBalanceDuringPeriod": peak_val,
+                "ClosingBalance": close_val,  # > 0 because still holding on Dec 31
+                "_FMV_USD": unit_cost,
+                "_SaleDate": sell_date,
+                "_GrossProceeds": proceeds_inr,
+                "_total_qty": qty,
+                "_open_qty": qty,   # All shares still holding (future sold)
+                "_sold_qty": 0,
+                "_sold_details": [],
+                "TotGrossAmtPaidCredited": 0,  # Will be calculated below
+                "TotGrossProceeds": 0  # 0 because not sold yet in this FY
             })
 
         # 4. Calculate dividends per lot based on holdings on dividend payment date
