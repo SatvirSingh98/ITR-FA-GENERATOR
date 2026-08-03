@@ -1279,7 +1279,15 @@ class ScheduleFAApp:
             if acq_date > self.end_date:
                 continue
 
-            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+            # Get symbol from row, or infer if only one company in portfolio
+            if pd.notna(row['Symbol']):
+                symbol = str(row['Symbol']).strip()
+            elif len(self.company_cache) == 1:
+                symbol = list(self.company_cache.keys())[0]
+                print(f"[i] Symbol missing for row, using {symbol} (only company in portfolio)")
+            else:
+                raise ValueError(f"Symbol column missing for row with acquisition date {acq_date} and multiple companies in portfolio. Cannot determine which company.")
+
             comp_info = self.get_company_details(symbol)
 
             plan_type = str(row['Plan Type'])
@@ -1318,7 +1326,16 @@ class ScheduleFAApp:
         #            Gross Proceeds = actual proceeds from sale
         for _, row in df_sold.iterrows():
             qty = int(row['Quantity'])
-            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+
+            # Get symbol from row, or infer if only one company in portfolio
+            if pd.notna(row['Symbol']):
+                symbol = str(row['Symbol']).strip()
+            elif len(self.company_cache) == 1:
+                symbol = list(self.company_cache.keys())[0]
+                print(f"[i] Symbol missing for sold row, using {symbol} (only company in portfolio)")
+            else:
+                raise ValueError(f"Symbol column missing for sold row with quantity {qty} and multiple companies in portfolio. Cannot determine which company.")
+
             comp_info = self.get_company_details(symbol)
 
             # Determine if it's RSU or ESPP based on Plan Type column
@@ -1380,7 +1397,16 @@ class ScheduleFAApp:
         #            Gross Proceeds = 0 (not sold yet in this FY)
         for _, row in df_sold_future.iterrows():
             qty = int(row['Quantity'])
-            symbol = str(row['Symbol']).strip() if pd.notna(row['Symbol']) else "AMD"
+
+            # Get symbol from row, or infer if only one company in portfolio
+            if pd.notna(row['Symbol']):
+                symbol = str(row['Symbol']).strip()
+            elif len(self.company_cache) == 1:
+                symbol = list(self.company_cache.keys())[0]
+                print(f"[i] Symbol missing for future-sold row, using {symbol} (only company in portfolio)")
+            else:
+                raise ValueError(f"Symbol column missing for future-sold row with quantity {qty} and multiple companies in portfolio. Cannot determine which company.")
+
             comp_info = self.get_company_details(symbol)
 
             plan_type = str(row.get('Plan Type', ''))
@@ -1451,7 +1477,7 @@ class ScheduleFAApp:
                         continue  # Skip unvested
 
                     # Extract symbol from NameOfEntity (or use stored symbol)
-                    # For now, check if this is the right symbol (AMD, etc.)
+                    # Match dividend symbol to tranche company
                     tranche_symbol = div_symbol  # Assuming single symbol for now
 
                     acq_date = tranche['InterestAcquiringDate']
