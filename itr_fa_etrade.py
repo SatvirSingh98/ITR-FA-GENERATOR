@@ -1602,10 +1602,12 @@ class ScheduleFAApp:
 
         # Build a mapping of company name to symbol for matching tranches
         # We'll need to match tranches to their company
+        # IMPORTANT: Use cleaned name (without commas) to match tranches
         company_name_to_symbol = {}
         for symbol in symbols_in_portfolio:
             comp_info = self.get_company_details(symbol)
-            company_name_to_symbol[comp_info["name"]] = symbol
+            cleaned_name = self.clean_text_for_itr(comp_info["name"])
+            company_name_to_symbol[cleaned_name] = symbol
 
         # Get the daily matrix (dates and TTBR) from first company
         first_symbol = symbols_in_portfolio[0]
@@ -1647,9 +1649,11 @@ class ScheduleFAApp:
                         continue  # This tranche belongs to a different company
 
                     acq_date = tranche['InterestAcquiringDate']
+                    sell_date = tranche.get('_SaleDate')  # None if not sold
 
                     # Determine if we owned this holding on this date
-                    if acq_date <= date:
+                    # Must be: acquired by this date AND not yet sold (or sold after this date)
+                    if acq_date <= date and (sell_date is None or sell_date > date):
                         # Extract quantity from nature string
                         nature = tranche['NatureOfEntity']
                         qty_match = re.search(r'\((\d+)\s+shares?\)', nature)
@@ -2036,12 +2040,12 @@ class ScheduleFAApp:
                                                    'Total Account Value (INR)']].copy()
         df_a2_peak = df_a2_peak.rename(columns={
             'Date': 'Date',
-            'TTBR': 'SBI TTBR (USD to INR)',
+            'TTBR': 'SBI TTBR',
             'Total Account Value (USD)': 'Total Account Value (USD)',
             'Total Account Value (INR)': 'Total Account Value (INR)'
         })
         # Round values
-        df_a2_peak['SBI TTBR (USD to INR)'] = df_a2_peak['SBI TTBR (USD to INR)'].round(2)
+        df_a2_peak['SBI TTBR'] = df_a2_peak['SBI TTBR'].round(2)
         df_a2_peak['Total Account Value (USD)'] = df_a2_peak['Total Account Value (USD)'].round(2)
         df_a2_peak['Total Account Value (INR)'] = df_a2_peak['Total Account Value (INR)'].round(2)
 
@@ -2056,7 +2060,7 @@ class ScheduleFAApp:
         # Add peak summary data
         summary_items = [
             ('Peak Date', str(peak_account_row['Date'])),
-            ('TTBR', float(peak_account_row['SBI TTBR (USD to INR)'])),
+            ('TTBR', float(peak_account_row['SBI TTBR'])),
             ('Account Value (USD)', float(peak_account_row['Total Account Value (USD)'])),
             ('Account Value (INR)', round(peak_account_row['Total Account Value (INR)'], 2)),
             ('', ''),
