@@ -1,7 +1,7 @@
-# Reference Sheet - Daily Rates
+# Calendar Year - Daily Rates Sheet
 
 ## Overview
-The Excel file `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains a third sheet called **"Reference - Daily Rates"** with complete daily data for the entire year {YEAR}.
+The Excel file `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains a sheet called **"{YEAR} - Daily Rates"** with complete daily data for the entire calendar year {YEAR}.
 
 ## Sheet Columns
 
@@ -73,6 +73,12 @@ For ESPP Shares (6 shares) acquired on {DATE}:
 - For actual Table A2 peak calculation, see **"A2 Peak Calculation"** sheet
 - Shows daily total account value and identifies the peak date
 - This is what's reported in Table A2 "Peak Balance During Period"
+
+### Check Per-Lot Peak Details
+- For individual lot peak dates and calculation windows, see **"A3 Peak Value Details"** sheet
+- Shows exactly when each lot peaked and the calculation window used
+- Useful for understanding why different lots have different peak values
+- See [a3_peak_value_details.md](a3_peak_value_details.md) for detailed documentation
 
 ## Data Sources
 

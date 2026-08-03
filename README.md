@@ -211,14 +211,17 @@ Edit `config.json`:
 Generated in `outputs/` folder:
 
 1. **schedule_fa_2025-26.json** - Upload to ITR e-filing portal
-2. **schedule_fa_2025-26.xlsx** - Review with CA (7 beautifully formatted sheets):
+2. **schedule_fa_2025-26.xlsx** - Review with CA (10 beautifully formatted sheets):
    - **Table A2 Custodial Acc** - Account summary with peak & closing balance
    - **Table A3 Equity Interest** - Individual holdings (RSU/ESPP tranches)
-   - **Excluded from A3** - Audit trail of holdings removed (sold in previous years)
    - **Capital Gains** - Sale details with LTCG/STCG tax calculations + Advance tax schedule
-   - **Reference - Daily Rates** - Stock prices + SBI TTBR + Peak per-share info
+   - **Schedule OS** - Dividend income (Other Sources)
+   - **Schedule FSI** - Foreign Source Income summary
+   - **Excluded from A3** - Audit trail of holdings removed (sold in previous years)
+   - **2025 - Daily Rates** - Stock prices + SBI TTBR for each trading day
    - **A2 Peak Calculation** - Daily account values showing peak date
-   - **Pre-FY Holdings Init Val** - Initial value details for pre-FY acquisitions
+   - **A3 Peak Value Details** - Peak date, window, price breakdown for each lot
+   - **Pre-2025 Holdings Init Val** - Initial value details for pre-FY acquisitions
 3. **schedule_fa_2025-26_table_a2.csv** - ITR format
 4. **schedule_fa_2025-26_table_a3.csv** - ITR format
 5. **output_summary.txt** - Generation log with all console output

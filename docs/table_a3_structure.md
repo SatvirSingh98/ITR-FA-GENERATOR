@@ -187,6 +187,47 @@ WRONG: ESPP (11 shares) | Initial: ₹163,037 | Closing: ₹210,770 | Proceeds: 
 
 ---
 
+## Peak Value Calculation Windows
+
+The peak value calculation window depends on when the lot was acquired and whether it was sold.
+
+### For Shares Acquired BEFORE Calendar Year
+
+**Holding shares (NOT sold):**
+- **Window:** Jan 1 (calendar year start) to Dec 31 (calendar year end)
+- **Example:** Acquired Nov 8, 2024 → Peak from **Jan 1, 2025 to Dec 31, 2025**
+- **Why:** Previous year prices are irrelevant for this year's Schedule FA
+
+**Sold shares:**
+- **Window:** Jan 1 (calendar year start) to Sale date
+- **Example:** Acquired Nov 8, 2024, Sold Aug 15, 2025 → Peak from **Jan 1, 2025 to Aug 15, 2025**
+- **Why:** Peak calculation stops at sale date (share no longer held after that)
+
+### For Shares Acquired DURING Calendar Year
+
+**Holding shares (NOT sold):**
+- **Window:** Acquisition date to Dec 31 (calendar year end)
+- **Example:** Acquired May 9, 2025 → Peak from **May 9, 2025 to Dec 31, 2025**
+- **Why:** Peak starts from when shares were first held
+
+**Sold shares:**
+- **Window:** Acquisition date to Sale date
+- **Example:** Acquired May 9, 2025, Sold Sep 20, 2025 → Peak from **May 9, 2025 to Sep 20, 2025**
+- **Why:** Peak is only for the period shares were actually held
+
+### Implementation (Code Lines 1015-1016)
+
+```python
+hold_start = max(self.start_date, acq_date_str)  # Later of: Jan 1 OR acquisition
+hold_end = sell_date_str if (sell_date_str and sell_date_str <= self.end_date) else self.end_date
+```
+
+### Verification
+
+The **A3 Peak Value Details** sheet shows the exact peak calculation window and peak date for each lot. See [a3_peak_value_details.md](a3_peak_value_details.md) for details.
+
+---
+
 ## FIFO Handling
 
 ### Question to ITRFA.in:

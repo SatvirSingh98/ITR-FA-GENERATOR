@@ -1057,7 +1057,15 @@ class ScheduleFAApp:
                 print(f"[!] WARNING: Cannot calculate initial value for {acq_date_str}")
 
         # 2. Peak Value during holding window
+        peak_idx = window['Valuation_Per_Share_INR'].idxmax()
         peak_val = round(qty * window['Valuation_Per_Share_INR'].max(), 2)
+
+        # Get peak details for reporting
+        peak_row = window.loc[peak_idx]
+        peak_date = peak_row['Date']
+        peak_price_usd = peak_row['Stock_Close_USD']
+        peak_ttbr = peak_row['TTBR']
+        peak_per_share_inr = peak_row['Valuation_Per_Share_INR']
 
         # 3. Closing Value
         # If sold within this FY: Closing = 0 (no longer holding)
@@ -1071,7 +1079,17 @@ class ScheduleFAApp:
             close_per_share = dec31_row['Valuation_Per_Share_INR'].values[0] if not dec31_row.empty else df_matrix['Valuation_Per_Share_INR'].iloc[-1]
             closing_val = round(qty * close_per_share, 2)
 
-        return initial_val, peak_val, closing_val
+        # Return values + peak details dict
+        peak_details = {
+            'peak_date': peak_date,
+            'peak_price_usd': peak_price_usd,
+            'peak_ttbr': peak_ttbr,
+            'peak_per_share_inr': peak_per_share_inr,
+            'hold_start': hold_start,
+            'hold_end': hold_end
+        }
+
+        return initial_val, peak_val, closing_val, peak_details
 
     def _scan_and_reload_ttbr_if_needed(self, bystatus_path, gl_path):
         """Scan E*TRADE files for pre-FY acquisition dates and reload TTBR if needed."""
@@ -1272,7 +1290,7 @@ class ScheduleFAApp:
             purchase_fmv_str = str(row['Purchase Date FMV']).replace('$', '').replace(',', '').strip()
             unit_cost = float(purchase_fmv_str) if purchase_fmv_str and purchase_fmv_str != '--' else float(row['Est. Cost Basis (per share):'])
 
-            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
+            init_val, peak_val, close_val, peak_details = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
 
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
@@ -1290,6 +1308,7 @@ class ScheduleFAApp:
                 "_open_qty": qty,   # All shares are open (holding)
                 "_sold_qty": 0,
                 "_sold_details": [],
+                "_peak_details": peak_details,  # Store peak date and details
                 "TotGrossAmtPaidCredited": 0,  # Will be calculated below
                 "TotGrossProceeds": 0
             })
@@ -1321,7 +1340,7 @@ class ScheduleFAApp:
 
             proceeds_usd = float(row['Total Proceeds'])
 
-            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, sell_date_str=sell_date, unit_cost_usd=unit_cost)
+            init_val, peak_val, close_val, peak_details = self.calculate_tranche_values(symbol, qty, acq_date, sell_date_str=sell_date, unit_cost_usd=unit_cost)
 
             df_matrix = comp_info["matrix"]
             sell_row = df_matrix[df_matrix['Date'] == sell_date]
@@ -1351,6 +1370,7 @@ class ScheduleFAApp:
                     'proceeds_usd': proceeds_usd,
                     'proceeds_inr': proceeds_inr
                 }],
+                "_peak_details": peak_details,  # Store peak date and details
                 "TotGrossAmtPaidCredited": 0,  # Will be calculated below
                 "TotGrossProceeds": proceeds_inr
             })
@@ -1389,7 +1409,7 @@ class ScheduleFAApp:
             proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
 
             # Calculate values WITHOUT sell date (so closing balance is > 0)
-            init_val, peak_val, close_val = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
+            init_val, peak_val, close_val, peak_details = self.calculate_tranche_values(symbol, qty, acq_date, unit_cost_usd=unit_cost)
 
             equity_tranches.append({
                 "CountryName": "UNITED STATES OF AMERICA",
@@ -1409,6 +1429,7 @@ class ScheduleFAApp:
                 "_open_qty": qty,   # All shares still holding (future sold)
                 "_sold_qty": 0,
                 "_sold_details": [],
+                "_peak_details": peak_details,  # Store peak date and details
                 "TotGrossAmtPaidCredited": 0,  # Will be calculated below
                 "TotGrossProceeds": 0  # 0 because not sold yet in this FY
             })
@@ -1796,6 +1817,28 @@ class ScheduleFAApp:
 
         df_a2 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignCustodialAcc"])
         df_a3 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
+
+        # Create Peak Value Details sheet
+        peak_details_data = []
+        for tranche in equity_tranches:
+            if 'Beneficial Interest' in tranche['NatureOfEntity']:
+                continue  # Skip unvested shares
+
+            peak_info = tranche.get('_peak_details', {})
+            peak_details_data.append({
+                'Nature of Entity': tranche['NatureOfEntity'],
+                'Acquisition Date': tranche['InterestAcquiringDate'],
+                'Quantity': tranche['_total_qty'],
+                'Peak Calculation Window Start': peak_info.get('hold_start', ''),
+                'Peak Calculation Window End': peak_info.get('hold_end', ''),
+                'Peak Date': peak_info.get('peak_date', ''),
+                'Peak Price (USD)': round(peak_info.get('peak_price_usd', 0), 2),
+                'Peak TTBR': round(peak_info.get('peak_ttbr', 0), 2),
+                'Peak Value per Share (INR)': round(peak_info.get('peak_per_share_inr', 0), 2),
+                'Peak Value Total (INR)': tranche['PeakBalanceDuringPeriod']
+            })
+
+        df_peak_details = pd.DataFrame(peak_details_data)
 
         # Add USD columns to A2 (for reference like ITRFA.in)
         # Calculate USD values by dividing INR by approximate TTBR
@@ -2408,8 +2451,10 @@ class ScheduleFAApp:
             df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
 
             df_excluded_a3.to_excel(writer, sheet_name="Excluded from A3", index=False)
-            df_reference.to_excel(writer, sheet_name="Reference - Daily Rates", index=False)
+            reference_sheet_name = f"{self.calendar_year} - Daily Rates"
+            df_reference.to_excel(writer, sheet_name=reference_sheet_name, index=False)
             df_a2_peak.to_excel(writer, sheet_name="A2 Peak Calculation", index=False)
+            df_peak_details.to_excel(writer, sheet_name="A3 Peak Value Details", index=False)
             pre_fy_sheet_name = f"Pre-{self.calendar_year} Holdings Init Val"
             df_pre_fy.to_excel(writer, sheet_name=pre_fy_sheet_name, index=False)
 
@@ -2770,7 +2815,7 @@ class ScheduleFAApp:
         df_a3_csv.to_csv(csv_a3_filename, index=False, quoting=0)  # quoting=0 = QUOTE_MINIMAL
 
         # Count total sheets
-        base_sheets = 9  # A2, A3, OS, FSI, Excluded, CG, Reference, A2 Peak, Pre-FY
+        base_sheets = 10  # A2, A3, OS, FSI, Excluded, CG, Reference, A2 Peak, A3 Peak Details, Pre-FY
         dividend_sheets = 0
         if not df_dividends.empty:
             dividend_sheets = 2  # Dividends (FA) and Dividends (OS)
@@ -2785,8 +2830,9 @@ class ScheduleFAApp:
         print(f"        - Schedule OS (Other Sources - Dividend Income)")
         print(f"        - Schedule FSI (Foreign Source Income)")
         print(f"        - Excluded from A3 (Sales from previous years)")
-        print(f"        - Reference - Daily Rates (AMD prices + SBI TTBR)")
+        print(f"        - {self.calendar_year} - Daily Rates (AMD prices + SBI TTBR)")
         print(f"        - A2 Peak Calculation (Daily account values)")
+        print(f"        - A3 Peak Value Details (Peak date and value breakdown per lot)")
         print(f"        - Pre-{self.calendar_year} Holdings Init Val")
         if not df_dividends.empty:
             print(f"        - Dividends (Schedule FA) - {len(df_dividends)} payments, exact date TTBR")
