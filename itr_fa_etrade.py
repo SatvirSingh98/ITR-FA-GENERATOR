@@ -1511,20 +1511,25 @@ class ScheduleFAApp:
                 print("\n[*] Checking for unvested RSUs (conservative disclosure enabled)...")
                 df_unvested = pd.read_excel(bystatus_path, sheet_name='Unvested')
 
-                # Filter for summary row with total unvested (last row usually has Symbol=AMD and totals)
-                # Or aggregate from individual rows
-                total_unvested = 0
-                earliest_grant_date = None
+                # Get all companies from company_cache
+                symbols_in_portfolio = sorted(self.company_cache.keys())
 
-                # Find rows with Symbol = AMD and Unvested Qty.
-                unvested_grants = df_unvested[
-                    (df_unvested['Symbol'] == 'AMD') &
-                    (df_unvested['Plan Type'].notna()) &
-                    (df_unvested['Unvested Qty.'].notna()) &
-                    (df_unvested['Unvested Qty.'] > 0)
-                ]
+                # Process unvested RSUs for EACH company
+                for symbol in symbols_in_portfolio:
+                    comp_info = self.get_company_details(symbol)
+                    df_matrix = comp_info["matrix"]
 
-                if not unvested_grants.empty:
+                    # Find unvested grants for this company
+                    unvested_grants = df_unvested[
+                        (df_unvested['Symbol'] == symbol) &
+                        (df_unvested['Plan Type'].notna()) &
+                        (df_unvested['Unvested Qty.'].notna()) &
+                        (df_unvested['Unvested Qty.'] > 0)
+                    ]
+
+                    if unvested_grants.empty:
+                        continue  # No unvested RSUs for this company
+
                     total_unvested = int(unvested_grants['Unvested Qty.'].sum())
 
                     # Get earliest grant date
@@ -1535,12 +1540,8 @@ class ScheduleFAApp:
                         # Use Dec 31 of current year if no grant date found
                         earliest_grant_date = self.end_date
 
-                    print(f"[OK] Found {total_unvested} unvested RSU units")
+                    print(f"[OK] Found {total_unvested} unvested {symbol} RSU units")
                     print(f"    Earliest grant date: {earliest_grant_date}")
-
-                    # Get AMD company details
-                    comp_info = self.get_company_details("AMD")
-                    df_matrix = comp_info["matrix"]
 
                     # Calculate peak value (unvested qty x peak price x peak TTBR)
                     if not df_matrix.empty:
@@ -1560,7 +1561,7 @@ class ScheduleFAApp:
                         close_price_inr = df_matrix['Valuation_Per_Share_INR'].iloc[-1]
                         close_val = round(total_unvested * close_price_inr, 2)
 
-                    # Add unvested RSUs as one aggregated A3 row
+                    # Add unvested RSUs as one aggregated A3 row per company
                     # ITR portal limit: 34 characters for NatureOfEntity
                     # "Beneficial Interest" = legal term for future right to receive shares (not yet acquired)
                     equity_tranches.append({
@@ -1582,8 +1583,6 @@ class ScheduleFAApp:
                     print(f"    Initial Value: Rs. 0 (not acquired yet)")
                     print(f"    Peak Value: Rs. {peak_val:,.2f}")
                     print(f"    Closing Value: Rs. {close_val:,.2f}")
-                else:
-                    print("[i] No unvested RSUs found in Unvested sheet")
 
             except Exception as e:
                 print(f"[i] Could not process unvested RSUs: {e}")
