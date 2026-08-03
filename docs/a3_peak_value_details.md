@@ -290,7 +290,6 @@ df_peak_details = pd.DataFrame(peak_details_data)
 - **Table A3 Structure:** [table_a3_structure.md](table_a3_structure.md)
 - **Peak Calculation Logic:** This file
 - **Daily Rates Sheet:** Shows stock prices and TTBR for all trading days
-- **ITRFA.in Clarifications:** [itrfa_clarifications.md](itrfa_clarifications.md)
 
 ---
 
