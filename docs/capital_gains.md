@@ -627,9 +627,11 @@ round(5750.001) = 5750      ✗ (risky - underpayment)
 - **Different from Schedule FA:** Schedule FA uses exact acquisition/sale dates
 - If TTBR missing for specified date, the script will fail (needs manual intervention)
 
-### 3. FIFO is Mandatory
-- Cannot choose which shares to sell (tax rule)
-- Oldest shares must be sold first
+### 3. Lot Matching - E*TRADE's Actual Method Used
+- **FIFO is NOT mandatory for foreign brokerage accounts** (only for Indian demat accounts per Section 45(2A))
+- We use **E*TRADE's actual lot matching** from the Gains & Losses report
+- E*TRADE allows specific lot selection - we report whatever E*TRADE executed
+- This correctly handles RSU sell-to-cover and other specific lot sales
 
 ### 4. Multiple Sales
 If you sold multiple times:
@@ -649,7 +651,7 @@ Capital gains can vary significantly based on:
 ## Verification Steps
 
 1. Open **"Capital Gains"** sheet in Excel
-2. Verify FIFO matching (oldest shares sold first)
+2. Verify lot matching matches E*TRADE's Gains & Losses report (Acquisition Date column)
 3. Check holding period calculation (months)
 4. Confirm LTCG vs STCG classification
 5. Verify tax rate applied (12.5% or 31.2%)
@@ -668,7 +670,7 @@ A: 24 months = STCG (must be **more than** 24 for LTCG)
 A: Those sales are excluded (already reported in previous ITR)
 
 **Q: Can I choose which shares to sell?**
-A: No, FIFO is mandatory per Indian tax law
+A: For foreign brokerage accounts like E*TRADE, **YES** - you can use specific lot selection. FIFO is only mandatory for Indian demat accounts (Section 45(2A)). We report whatever lot E*TRADE actually sold per the Gains & Losses report.
 
 **Q: What if TTBR is missing for sale date?**
 A: Script will error out - you need to manually add that date's TTBR to the CSV
