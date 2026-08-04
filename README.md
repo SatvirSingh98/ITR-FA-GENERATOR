@@ -13,8 +13,10 @@ Licensed under GPL-3.0 - see [LICENSE](LICENSE) for details.
 
 ### Step 1: Add E*TRADE Files
 Place these files in `inputs/` folder:
-- `ByStatus_expanded.xlsx` (required)
-- `G&L_Expanded.xlsx` (optional - only if you sold stocks in this FY)
+- `ByStatus_expanded.xlsx` (REQUIRED - shows current holdings)
+- `G&L_Expanded.xlsx` (REQUIRED if you sold ANY shares - contains sold shares for Table A3 + Capital Gains)
+  - **Warning:** Without this file, Table A3 will be incomplete and Capital Gains will be empty
+  - Only skip if you had ZERO sales during the year
 - `Transaction_History.csv` (optional - only if you received dividends)
 
 ### Step 2: Run

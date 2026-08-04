@@ -104,8 +104,11 @@ Tax = Capital Gain × (12.5% for LTCG or 31.2% for STCG)
 - Location: `data/SBI_FOREX_CARD_RATES_USD.csv`
 
 **E*TRADE Data:**
-- Holdings: `inputs/ByStatus_expanded.xlsx`
-- Sales: `inputs/G&L_Expanded.xlsx`
+- Holdings: `inputs/ByStatus_expanded.xlsx` (REQUIRED)
+- Sales: `inputs/G&L_Expanded.xlsx` (REQUIRED if you sold any shares during the year)
+  - **Important:** G&L file contains sold shares which are removed from ByStatus
+  - Without it, Table A3 will be incomplete and Capital Gains will be empty
+  - Only skip this file if you had ZERO sales during the year
 
 ### Excel Output Sheets
 
@@ -159,6 +162,17 @@ The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
 
 ## Troubleshooting
 
+**Problem:** "Python not found" error when running GENERATE_ITR_FA.bat
+- **Solution:** Install Python 3.11+ from [python.org](https://python.org/downloads/) and check "Add Python to PATH" during installation
+
+**Problem:** Warning about G&L_Expanded.xlsx missing
+- **Solution:** 
+  - If you sold shares: Export G&L report from E*TRADE and place in `inputs/` folder
+  - If you had ZERO sales: Press any key to continue (script will skip capital gains)
+
+**Problem:** Table A3 missing sold shares
+- **Solution:** Sold shares only appear in G&L_Expanded.xlsx, not ByStatus. Make sure G&L file is present in inputs/
+
 **Problem:** Missing TTBR for a date
 - **Solution:** Check `data/SBI_FOREX_CARD_RATES_USD.csv` and manually add the missing date
 
@@ -170,6 +184,9 @@ The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
 
 **Problem:** Capital gains calculation looks off
 - **Solution:** Verify FIFO matching in "Capital Gains" sheet, check acquisition dates are correct
+
+**Problem:** "config.json has invalid JSON syntax" error before Python is installed
+- **Solution:** Install Python first. The batch file will re-check JSON validity after Python setup
 
 ## Additional Resources
 

@@ -45,16 +45,20 @@ if not exist config.json (
     )
 )
 
-python -c "import json; json.load(open('config.json'))" 2>nul
-if errorlevel 1 (
-    echo   [ERROR] config.json has invalid JSON syntax
-    echo.
-    pause
-    exit /b 1
+REM Validate JSON syntax only if Python is available (full check happens later)
+python --version >nul 2>&1
+if not errorlevel 1 (
+    python -c "import json; json.load(open('config.json'))" 2>nul
+    if errorlevel 1 (
+        echo   [ERROR] config.json has invalid JSON syntax
+        echo.
+        pause
+        exit /b 1
+    )
+    echo   [OK] Config is valid
+) else (
+    echo   [OK] Config exists (will validate after Python setup)
 )
-
-REM Account number is optional - will be extracted from ClientStatement PDF
-echo   [OK] Config is valid
 echo.
 
 echo [2/5] Checking inputs folder...
@@ -69,23 +73,7 @@ if not exist inputs\ByStatus_expanded.xlsx (
     pause
     exit /b 1
 )
-if not exist inputs\G^&L_Expanded.xlsx (
-    echo.
-    echo   ======================================================================
-    echo   [WARNING] G^&L_Expanded.xlsx not found!
-    echo.
-    echo   This file is REQUIRED if you sold ANY shares during the year.
-    echo   Without it:
-    echo     - Table A3 will be INCOMPLETE (missing sold shares)
-    echo     - Capital Gains will be EMPTY (missing tax calculations)
-    echo.
-    echo   Only continue if you are CERTAIN you had ZERO sales this year.
-    echo   ======================================================================
-    echo.
-    echo   Press Ctrl+C to stop, or
-    pause
-)
-echo   [OK] Required E*TRADE files found
+echo   [OK] ByStatus_expanded.xlsx found
 echo.
 
 echo [3/5] Checking outputs folder...
@@ -148,7 +136,30 @@ if errorlevel 1 (
 echo   [OK] Python environment ready
 echo.
 
-echo [5/5] Pre-flight checks complete!
+echo [5/5] Checking for G^&L file (uses Python for reliable detection)...
+REM Check for G&L file using Python (more reliable than batch file escaping)
+venv\Scripts\python.exe -c "import os, sys; sys.exit(0 if os.path.exists('inputs/G&L_Expanded.xlsx') else 1)" 2>nul
+if errorlevel 1 (
+    echo.
+    echo   ======================================================================
+    echo   [WARNING] G^&L_Expanded.xlsx not found!
+    echo.
+    echo   This file is REQUIRED if you sold ANY shares during the year.
+    echo   Without it:
+    echo     - Table A3 will be INCOMPLETE (missing sold shares held during calendar year^)
+    echo     - Capital Gains will be EMPTY (missing tax calculations^)
+    echo.
+    echo   Only continue if you are CERTAIN you had ZERO sales this year.
+    echo   ======================================================================
+    echo.
+    echo   Press Ctrl+C to stop, or
+    pause
+) else (
+    echo   [OK] G^&L_Expanded.xlsx found
+)
+echo.
+
+echo Pre-flight checks complete!
 echo.
 echo ================================================================
 
