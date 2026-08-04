@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: sbi-forex-fetch
+  cancel-in-progress: true
+
 jobs:
   fetch-and-update:
     runs-on: ubuntu-latest
@@ -26,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
