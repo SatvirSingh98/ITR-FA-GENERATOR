@@ -2413,13 +2413,18 @@ class ScheduleFAApp:
         } for item in capital_gains_data])
 
         # Table 2: Advance Tax Schedule - GROUPED by deadline applicability
-        # Group sales by which advance tax deadlines apply (based on sale date)
+        # Group sales by which advance tax deadlines are still available AFTER sale date
         if capital_gains_data:
-            # Group sales by sale month to determine applicable deadlines
             advance_tax_rows = []
 
-            # Group 1: Sales in Jan-Jun (before Jul 15) - All 4 deadlines apply
-            group1_sales = [item for item in capital_gains_data if pd.to_datetime(item['Sale Date']).month <= 6]
+            # Helper function to get FY year from a date
+            def get_fy_year(date):
+                return date.year if date.month >= 4 else date.year - 1
+
+            # Group 1: Sales from Apr 1 to Jul 15 - All 4 deadlines apply
+            group1_sales = [item for item in capital_gains_data
+                           if (pd.to_datetime(item['Sale Date']).month >= 4 and pd.to_datetime(item['Sale Date']).month <= 6) or
+                              (pd.to_datetime(item['Sale Date']).month == 7 and pd.to_datetime(item['Sale Date']).day <= 15)]
             if group1_sales:
                 group1_tax = sum(item['Tax Amount (INR)'] for item in group1_sales)
                 group1_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group1_sales)
@@ -2429,11 +2434,12 @@ class ScheduleFAApp:
 
                 # Get FY year from first sale in group
                 first_sale_date = pd.to_datetime(group1_sales[0]['Sale Date'])
-                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+                fy_year = get_fy_year(first_sale_date)
 
                 advance_tax_rows.append({
-                    'Sale Period': f'Jan-Jun {first_sale_date.year}',
+                    'Sale Period': f'Apr 1 - Jul 15, {fy_year}',
                     'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Tax Type': 'Advance Tax',
                     'Total Tax (INR)': group1_tax,
                     'By Jul 15': group1_jul,
                     'By Sep 15': group1_sep,
@@ -2442,8 +2448,11 @@ class ScheduleFAApp:
                     'Note': 'All 4 deadlines apply'
                 })
 
-            # Group 2: Sales in Jul-Aug (after Jul 15, before Sep 15) - 3 deadlines apply
-            group2_sales = [item for item in capital_gains_data if 7 <= pd.to_datetime(item['Sale Date']).month <= 8]
+            # Group 2: Sales from Jul 16 to Sep 15 - 3 deadlines (Jul passed)
+            group2_sales = [item for item in capital_gains_data
+                           if (pd.to_datetime(item['Sale Date']).month == 7 and pd.to_datetime(item['Sale Date']).day > 15) or
+                              (pd.to_datetime(item['Sale Date']).month == 8) or
+                              (pd.to_datetime(item['Sale Date']).month == 9 and pd.to_datetime(item['Sale Date']).day <= 15)]
             if group2_sales:
                 group2_tax = sum(item['Tax Amount (INR)'] for item in group2_sales)
                 group2_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group2_sales)  # Will be 0
@@ -2452,11 +2461,12 @@ class ScheduleFAApp:
                 group2_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group2_sales)
 
                 first_sale_date = pd.to_datetime(group2_sales[0]['Sale Date'])
-                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+                fy_year = get_fy_year(first_sale_date)
 
                 advance_tax_rows.append({
-                    'Sale Period': f'Jul-Aug {first_sale_date.year}',
+                    'Sale Period': f'Jul 16 - Sep 15, {fy_year}',
                     'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Tax Type': 'Advance Tax',
                     'Total Tax (INR)': group2_tax,
                     'By Jul 15': group2_jul,
                     'By Sep 15': group2_sep,
@@ -2465,8 +2475,12 @@ class ScheduleFAApp:
                     'Note': 'Jul 15 deadline passed'
                 })
 
-            # Group 3: Sales in Sep-Nov (after Sep 15, before Dec 15) - 2 deadlines apply
-            group3_sales = [item for item in capital_gains_data if 9 <= pd.to_datetime(item['Sale Date']).month <= 11]
+            # Group 3: Sales from Sep 16 to Dec 15 - 2 deadlines (Jul/Sep passed)
+            group3_sales = [item for item in capital_gains_data
+                           if (pd.to_datetime(item['Sale Date']).month == 9 and pd.to_datetime(item['Sale Date']).day > 15) or
+                              (pd.to_datetime(item['Sale Date']).month == 10) or
+                              (pd.to_datetime(item['Sale Date']).month == 11) or
+                              (pd.to_datetime(item['Sale Date']).month == 12 and pd.to_datetime(item['Sale Date']).day <= 15)]
             if group3_sales:
                 group3_tax = sum(item['Tax Amount (INR)'] for item in group3_sales)
                 group3_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group3_sales)  # Will be 0
@@ -2475,11 +2489,12 @@ class ScheduleFAApp:
                 group3_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group3_sales)
 
                 first_sale_date = pd.to_datetime(group3_sales[0]['Sale Date'])
-                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+                fy_year = get_fy_year(first_sale_date)
 
                 advance_tax_rows.append({
-                    'Sale Period': f'Sep-Nov {first_sale_date.year}',
+                    'Sale Period': f'Sep 16 - Dec 15, {fy_year}',
                     'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Tax Type': 'Advance Tax',
                     'Total Tax (INR)': group3_tax,
                     'By Jul 15': group3_jul,
                     'By Sep 15': group3_sep,
@@ -2488,8 +2503,11 @@ class ScheduleFAApp:
                     'Note': 'Jul/Sep deadlines passed'
                 })
 
-            # Group 4: Sales in Dec-Mar (after Dec 15) - Only Mar 15 deadline applies
-            group4_sales = [item for item in capital_gains_data if pd.to_datetime(item['Sale Date']).month >= 12 or pd.to_datetime(item['Sale Date']).month <= 3]
+            # Group 4: Sales from Dec 16 to Mar 15 - Only Mar 15 deadline applies
+            group4_sales = [item for item in capital_gains_data
+                           if (pd.to_datetime(item['Sale Date']).month == 12 and pd.to_datetime(item['Sale Date']).day > 15) or
+                              (pd.to_datetime(item['Sale Date']).month in [1, 2]) or
+                              (pd.to_datetime(item['Sale Date']).month == 3 and pd.to_datetime(item['Sale Date']).day <= 15)]
             if group4_sales:
                 group4_tax = sum(item['Tax Amount (INR)'] for item in group4_sales)
                 group4_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group4_sales)  # Will be 0
@@ -2498,17 +2516,49 @@ class ScheduleFAApp:
                 group4_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group4_sales)
 
                 first_sale_date = pd.to_datetime(group4_sales[0]['Sale Date'])
-                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+                fy_year = get_fy_year(first_sale_date)
+
+                # Period spans across calendar years
+                if first_sale_date.month >= 4:
+                    period_str = f'Dec 16, {fy_year} - Mar 15, {fy_year+1}'
+                else:
+                    period_str = f'Dec 16, {fy_year-1} - Mar 15, {fy_year}'
 
                 advance_tax_rows.append({
-                    'Sale Period': f'Dec {first_sale_date.year}-Mar {first_sale_date.year + 1}',
+                    'Sale Period': period_str,
                     'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Tax Type': 'Advance Tax',
                     'Total Tax (INR)': group4_tax,
                     'By Jul 15': group4_jul,
                     'By Sep 15': group4_sep,
                     'By Dec 15': group4_dec,
                     'By Mar 15': group4_mar,
                     'Note': 'Only Mar 15 deadline applies'
+                })
+
+            # Group 5: Sales from Mar 16 to Mar 31 - Pay by Mar 31 (self-assessment tax)
+            group5_sales = [item for item in capital_gains_data
+                           if pd.to_datetime(item['Sale Date']).month == 3 and pd.to_datetime(item['Sale Date']).day > 15]
+            if group5_sales:
+                group5_tax = sum(item['Tax Amount (INR)'] for item in group5_sales)
+                group5_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group5_sales)  # Will be 0
+                group5_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in group5_sales)  # Will be 0
+                group5_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in group5_sales)  # Will be 0
+                group5_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group5_sales)  # Will be 0
+
+                first_sale_date = pd.to_datetime(group5_sales[0]['Sale Date'])
+                fy_year = get_fy_year(first_sale_date)
+
+                advance_tax_rows.append({
+                    'Sale Period': f'Mar 16-31, {first_sale_date.year}',
+                    'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Tax Type': 'Self-Assessment Tax',
+                    'Total Tax (INR)': group5_tax,
+                    'By Jul 15': group5_jul,
+                    'By Sep 15': group5_sep,
+                    'By Dec 15': group5_dec,
+                    'By Mar 15': group5_mar,
+                    'Note': 'Pay by Mar 31 (self-assessment)'
                 })
 
             # Add TOTAL row at the end
@@ -2522,6 +2572,7 @@ class ScheduleFAApp:
                 advance_tax_rows.append({
                     'Sale Period': 'TOTAL',
                     'Financial Year': '',
+                    'Tax Type': '',
                     'Total Tax (INR)': total_tax,
                     'By Jul 15': total_jul,
                     'By Sep 15': total_sep,
@@ -2533,7 +2584,7 @@ class ScheduleFAApp:
             df_advance_tax = pd.DataFrame(advance_tax_rows)
         else:
             df_advance_tax = pd.DataFrame(columns=[
-                'Sale Period', 'Financial Year', 'Total Tax (INR)', 'By Jul 15',
+                'Sale Period', 'Financial Year', 'Tax Type', 'Total Tax (INR)', 'By Jul 15',
                 'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
             ])
 
