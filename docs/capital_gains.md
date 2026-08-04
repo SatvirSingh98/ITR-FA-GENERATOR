@@ -122,22 +122,74 @@ From `G&L_Expanded.xlsx` (E*TRADE Gain & Loss report):
 - Extract all SELL transactions
 - Get: Symbol, Quantity Sold, Sale Date, Sale Price (USD)
 
-### Step 2: Match with Acquisitions (FIFO)
-For each sale, match against acquisitions using **FIFO (First-In, First-Out)**:
-- Oldest unsold shares are sold first
-- Track remaining quantity per tranche
+### Step 2: Lot Matching - E*TRADE's Actual Matching (NOT Forced FIFO)
+
+**CRITICAL:** We use **E*TRADE's actual lot matching** from the Gains & Losses report, NOT re-derived FIFO!
+
+> **"FIFO — we use ETRADE's own Gains & Losses export as the source of which lot was sold. That report already reflects whichever lot-relief method ETRADE itself applied when the sale executed. **We don't re-derive or override the lot order on top of it.**"**
+>
+> — ITRFA.in Official Guidance (2026-08-03)
+
+**Why This Matters:**
+
+From the article [Lot matching vs. FIFO: why it changes your capital gains (July 2026)](https://ethro.com):
+
+> **"Section 45(2A) of the Income-tax Act mandates FIFO — but only for securities held in dematerialised form through an Indian depository (NSDL/CDSL). A foreign brokerage account is not that."**
+
+**Key Points:**
+- ✅ **FIFO is NOT mandatory** for foreign brokerage accounts (E*TRADE)
+- ✅ **E*TRADE's matching is authoritative** - we report what actually happened
+- ✅ **Handles RSU sell-to-cover correctly** - avoids phantom gains from forced FIFO
+
+**Example: RSU Sell-to-Cover (Why Lot Matching Matters)**
+
+**Scenario:**
+- Nov 8, 2024: You already own 10 AMD shares (old lot, cost basis $147.95)
+- May 9, 2025: 17 RSU vest (new lot, cost basis = $264.33 vest price)
+- May 9, 2025: Immediately sell 5 shares to cover taxes
+
+**FIFO (Wrong for sell-to-cover):**
+```
+Sale matched to Nov 8, 2024 lot (oldest)
+Cost basis: $147.95 × 5 = $739.75
+Sale proceeds: $264.50 × 5 = $1,322.50
+Capital gain: $582.75 (LARGE phantom gain!)
+```
+
+**E*TRADE's Actual Matching (Correct):**
+```
+Sale matched to May 9, 2025 lot (the vested shares)
+Cost basis: $264.33 × 5 = $1,321.65
+Sale proceeds: $264.50 × 5 = $1,322.50
+Capital gain: $0.85 (near-zero, correct!)
+```
+
+**Our Implementation:**
+```python
+# Read E*TRADE's "Date Acquired" column AS-IS from G&L_Expanded.xlsx
+acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
+
+# We NEVER re-calculate FIFO - we trust E*TRADE's matching
+```
+
+**Legal Position:**
+- Foreign accounts: Specific lot identification is **legitimate and defensible**
+- E*TRADE's G&L report: **Already reflects their lot-relief method**
+- Our approach: **Report what actually happened**, not impose FIFO retroactively
 
 **Example:**
 ```
-Acquisitions:
-- {DATE}: 10 shares (Tranche A)
-- {DATE}: 8 shares (Tranche B)
-- {DATE}: 6 shares (Tranche C)
+Acquisitions (from ByStatus_expanded.xlsx):
+- Nov 8, 2024: 10 shares (Lot A)
+- May 9, 2025: 17 shares (Lot B)
 
-Sale: {DATE}: 12 shares
-FIFO Matching:
-- 10 shares from Tranche A ({DATE})
-- 2 shares from Tranche B ({DATE})
+Sale (from G&L_Expanded.xlsx):
+- Date Sold: May 9, 2025
+- Quantity: 5 shares
+- Date Acquired: May 9, 2025  ← E*TRADE says this sale closed Lot B!
+
+We report: Sold 5 shares from Lot B (May 9, 2025 acquisition)
+We DON'T say: Sold 5 shares from Lot A (forced FIFO)
 ```
 
 ### Step 3: Calculate Holding Period
@@ -217,7 +269,9 @@ Tax = math.ceil(Capital Gain × 0.312)
 
 ## Advance Tax Schedule (Income Tax Rule 234C)
 
-For sales in the **current or future FY**, advance tax must be paid in installments:
+### Overview
+
+For capital gains realized during the Financial Year, advance tax must be paid in installments:
 
 | Due Date | Cumulative % | Amount (if total tax = ₹10,000) |
 |----------|--------------|--------------------------------|
@@ -226,15 +280,163 @@ For sales in the **current or future FY**, advance tax must be paid in installme
 | **Dec 15** | 75% | ₹7,500 |
 | **Mar 15** | 100% | ₹10,000 |
 
-### Calculation
-```python
-total_tax = sum(all LTCG + STCG tax)
+**Sources:**
+- [ClearTax - Advance Tax FY 2026-27](https://cleartax.in/s/advance-tax)
+- [Tax2Win - Advance Tax Payment](https://tax2win.in/guide/advance-tax)
+- [TaxGuru - Advance Tax under Income Tax Act](https://taxguru.in/income-tax/advance-tax-income-tax-act-1961.html)
+- [TaxBuddy - Advance Tax Rules for Capital Gains](https://www.taxbuddy.com/blog/advance-tax-for-capital-gains-investors)
 
-advance_jul = math.ceil(total_tax × 0.15)
-advance_sep = math.ceil(total_tax × 0.45)
-advance_dec = math.ceil(total_tax × 0.75)
-advance_mar = total_tax  # 100%
+---
+
+### Special Rule for Capital Gains: No Penalty for Missing Earlier Installments!
+
+**CRITICAL:** Capital gains have a **special exemption** from interest penalties under Section 234C!
+
+> **"If a taxpayer earns capital gains after one or more installment dates have passed, they are not liable to pay interest for the earlier installments. Instead, they must pay the full advance tax on such gains in the next immediate installment following the realization of income."**
+>
+> — [ClearTax on Advance Tax](https://cleartax.in/s/advance-tax)
+
+**What this means:**
+- ✅ Sale in **January** → Pay 100% by **Mar 15** → **No interest penalty** (Jul/Sep/Dec deadlines already passed)
+- ✅ Sale in **August** → Pay 100% by **Sep 15** → **No interest penalty** (Jul deadline already passed)
+- ✅ Sale in **October** → Pay 100% by **Dec 15** → **No interest penalty** (Jul/Sep deadlines already passed)
+
+**Key Point:** Pay by the **next deadline after the sale date** to avoid interest!
+
+---
+
+### Section 234C - Interest on Late/Short Payment
+
+**Rule:** 1% per month interest on short payment of advance tax installments
+
+**EXCEPTION for Capital Gains:**
+> "Interest under section 234C of the Act is not applicable on the shortfall in advance tax instalments provided such shortfall is on account of under-estimate or failure to estimate the amount of capital gains and **the whole of tax payable on such capital gains is paid by the advance tax payment deadline immediately due after the date when such capital gains arise.**"
+>
+> — [TaxGuru on Advance Tax](https://taxguru.in/income-tax/advance-tax-income-tax-act-1961.html)
+
+**Examples:**
+
+| Sale Date | Next Deadline | Interest if Paid by Deadline | Interest if Paid After |
+|-----------|---------------|------------------------------|------------------------|
+| Jan 15, 2026 | Mar 15, 2026 | ✅ **No interest** | ❌ 1% per month from Apr 1 |
+| Jul 20, 2025 | Sep 15, 2025 | ✅ **No interest** | ❌ 1% per month from Sep 16 |
+| Oct 5, 2025 | Dec 15, 2025 | ✅ **No interest** | ❌ 1% per month from Dec 16 |
+
+---
+
+### If No Installment Remains (Sale After Mar 15)
+
+From [India Filings](https://www.indiafilings.com/learn/advance-tax-payment):
+
+> **"When no installment is due, pay by 31st March of the relevant financial year to avoid interest."**
+
+**Example:**
+- Sale on **Mar 20, 2026** (after Mar 15 deadline)
+- Pay by **Mar 31, 2026** (self-assessment tax, not advance tax)
+- ✅ **No interest penalty**
+
+---
+
+### Section 234B - Interest on Non-Payment/Short Payment of Total Tax
+
+**Rule:** If total advance tax paid < 90% of assessed tax → 1% per month interest from Apr 1
+
+**EXCEPTION:** Capital gains special rule applies here too!
+
+From [Tax2Win](https://tax2win.in/guide/advance-tax):
+
+| Advance Tax Paid | Interest Under 234B |
+|------------------|---------------------|
+| **< 90% of total tax** | 1% per month from Apr 1 |
+| **≥ 90% of total tax** | No interest |
+
+**Example:**
+- Total tax liability: ₹1,00,000 (all from capital gains)
+- Sale on Jan 15, 2026
+- Paid ₹1,00,000 by Mar 15, 2026
+- **Result:** ✅ No interest under 234B or 234C
+
+---
+
+### Grouped Advance Tax Schedule (New in v2.0)
+
+Our tool now **groups sales by applicable deadlines** instead of showing one aggregated row!
+
+**Benefits:**
+1. ✅ Shows which sales go to which Financial Year
+2. ✅ Indicates which deadlines have already passed
+3. ✅ Clear payment planning by sale period
+
+**Example Output:**
+
+| Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | By Sep 15 | By Dec 15 | By Mar 15 | Note |
+|-------------|----------------|-----------------|-----------|-----------|-----------|-----------|------|
+| **Jan-Jun 2026** | FY 2026-27 | ₹1,40,654 | ₹21,100 | ₹63,296 | ₹1,05,492 | ₹1,40,654 | All 4 deadlines apply |
+| **Jul-Aug 2025** | FY 2025-26 | ₹50,000 | ₹0 | ₹22,500 | ₹37,500 | ₹50,000 | Jul 15 deadline passed |
+| **Sep-Nov 2025** | FY 2025-26 | ₹30,000 | ₹0 | ₹0 | ₹22,500 | ₹30,000 | Jul/Sep deadlines passed |
+| **Dec 2025-Mar 2026** | FY 2025-26 | ₹20,000 | ₹0 | ₹0 | ₹0 | ₹20,000 | Only Mar 15 deadline applies |
+| **TOTAL** | | **₹2,40,654** | **₹21,100** | **₹85,796** | **₹1,65,492** | **₹2,40,654** | Sum across all groups |
+
+**How to Use This:**
+
+**Group 1 (Jan-Jun Sales):** All 4 deadlines apply
 ```
+Jul 15: Pay ₹21,100 (15% of ₹1,40,654)
+Sep 15: Pay ₹42,196 more (cumulative 45%)
+Dec 15: Pay ₹42,196 more (cumulative 75%)
+Mar 15: Pay ₹35,162 more (total 100%)
+```
+
+**Group 2 (Jul-Aug Sales):** Only 3 deadlines apply (Jul passed)
+```
+Sep 15: Pay ₹22,500 (45% of ₹50,000)
+Dec 15: Pay ₹15,000 more (cumulative 75%)
+Mar 15: Pay ₹12,500 more (total 100%)
+```
+
+**Group 3 (Sep-Nov Sales):** Only 2 deadlines apply (Jul/Sep passed)
+```
+Dec 15: Pay ₹22,500 (75% of ₹30,000)
+Mar 15: Pay ₹7,500 more (total 100%)
+```
+
+**Group 4 (Dec-Mar Sales):** Only 1 deadline applies (only Mar left)
+```
+Mar 15: Pay ₹20,000 (100%)
+```
+
+---
+
+### Calculation Logic
+
+```python
+# Group sales by sale month to determine applicable deadlines
+if sale_month <= 6:  # Jan-Jun: All 4 deadlines apply
+    jul_payment = tax × 15%
+    sep_payment = tax × 45%
+    dec_payment = tax × 75%
+    mar_payment = tax × 100%
+
+elif sale_month <= 8:  # Jul-Aug: 3 deadlines (Jul passed)
+    jul_payment = 0
+    sep_payment = tax × 45%
+    dec_payment = tax × 75%
+    mar_payment = tax × 100%
+
+elif sale_month <= 11:  # Sep-Nov: 2 deadlines (Jul/Sep passed)
+    jul_payment = 0
+    sep_payment = 0
+    dec_payment = tax × 75%
+    mar_payment = tax × 100%
+
+else:  # Dec-Mar: Only Mar deadline applies
+    jul_payment = 0
+    sep_payment = 0
+    dec_payment = 0
+    mar_payment = tax × 100%
+```
+
+**IMPORTANT:** All values rounded UP using `math.ceil()`
 
 ## Example: Complete Calculation
 
@@ -314,14 +516,63 @@ Plus a summary section with:
 - By Dec 15 (75%)
 - By Mar 15 (100%)
 
-## Date Filtering
+## Extended Period: Calendar Year PLUS Next Q1
 
-**Sales Included:**
-- Only sales from **current FY onwards** are included
-- Example: Generating for FY {YEAR}-{YEAR+1}, only sales from Apr 1, {YEAR} onwards
+### Why Extended Period?
+
+**Schedule FA (Table A3):** Calendar year only (Jan 1 - Dec 31, 2025)
+
+**Capital Gains:** **Extended period** (Jan 1, 2025 - Mar 31, 2026)
+
+**Reason:** Sales in Jan-Mar 2026 belong to the **same Indian Financial Year (FY 2025-26)**, so they need:
+- Tax calculation for the same FY
+- Advance tax planning during FY 2025-26
+
+**Example:**
+```
+FY 2025-26: Apr 1, 2025 to Mar 31, 2026
+
+Capital Gains includes:
+- Jan 2025 - Dec 2025 (calendar year 2025)
+- Jan 2026 - Mar 2026 (Q1 of next calendar year)
+
+Why? All these sales fall in FY 2025-26!
+```
+
+### Date Filtering Logic
+
+**Sales Included in Capital Gains:**
+- From: Jan 1, 2025 (calendar year start)
+- To: Mar 31, 2026 (end of FY 2025-26)
+- Total: **15 months** of sales
 
 **Sales Excluded:**
-- Sales from previous years (already reported in past ITRs)
+- Before Jan 1, 2025 (previous calendar years, already reported)
+- After Mar 31, 2026 (next FY, will be reported next year)
+
+**Comparison:**
+
+| Sheet | Period | Duration | Example for FY 2025-26 |
+|-------|--------|----------|------------------------|
+| **Schedule FA (A3)** | Calendar year | 12 months | Jan 1, 2025 - Dec 31, 2025 |
+| **Capital Gains** | Extended | 15 months | Jan 1, 2025 - Mar 31, 2026 |
+
+### Example: Jan 2026 Sale
+
+**Sale Date:** Jan 15, 2026
+
+**Appears in:**
+- ❌ **Schedule FA (Table A3):** NO (calendar year 2025 ended Dec 31)
+- ✅ **Capital Gains:** YES (FY 2025-26 ends Mar 31, 2026)
+
+**Why?**
+- Table A3 reports holdings as of Dec 31, 2025 → Share was still held
+- Capital Gains reports sales in FY 2025-26 → Sale happened in same FY
+
+**Advance Tax:**
+- Sale in Jan 2026 → Belongs to FY 2025-26
+- Pay by Mar 15, 2026 (last deadline of FY 2025-26)
+- No interest penalty (special rule for capital gains)
 
 ## Important Notes
 
