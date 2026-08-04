@@ -1,9 +1,9 @@
 name: Fetch SBI TTBR Rates Daily
 
 on:
-  # Run daily at 7:00 PM IST (1:30 PM UTC = 7:00 PM GMT+5:30/IST)
+  # Run daily at 5:00 PM IST (11:30 AM UTC = 5:00 PM GMT+5:30/IST)
   schedule:
-    - cron: '30 13 * * *'
+    - cron: '30 11 * * *'
 
   # Allow manual trigger
   workflow_dispatch:
