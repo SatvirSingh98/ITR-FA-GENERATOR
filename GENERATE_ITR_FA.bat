@@ -70,10 +70,11 @@ if not exist inputs\ByStatus_expanded.xlsx (
     exit /b 1
 )
 if not exist inputs\G^&L_Expanded.xlsx (
-    echo   [i] G^&L_Expanded.xlsx not found - this is OK
-    echo   [i] This file is only needed if you sold stocks in this FY
+    echo   [i] G^&L_Expanded.xlsx not found - this is OK if you didn't sell any shares
+    echo   [i] This file is ONLY needed if you sold stocks during the year
+    echo   [i] Continuing without sales data...
 )
-echo   [OK] E*TRADE files found
+echo   [OK] Required E*TRADE files found
 echo.
 
 echo [3/5] Checking outputs folder...
