@@ -70,9 +70,20 @@ if not exist inputs\ByStatus_expanded.xlsx (
     exit /b 1
 )
 if not exist inputs\G^&L_Expanded.xlsx (
-    echo   [i] G^&L_Expanded.xlsx not found - this is OK if you didn't sell any shares
-    echo   [i] This file is ONLY needed if you sold stocks during the year
-    echo   [i] Continuing without sales data...
+    echo.
+    echo   ======================================================================
+    echo   [WARNING] G^&L_Expanded.xlsx not found!
+    echo.
+    echo   This file is REQUIRED if you sold ANY shares during the year.
+    echo   Without it:
+    echo     - Table A3 will be INCOMPLETE (missing sold shares)
+    echo     - Capital Gains will be EMPTY (missing tax calculations)
+    echo.
+    echo   Only continue if you are CERTAIN you had ZERO sales this year.
+    echo   ======================================================================
+    echo.
+    echo   Press Ctrl+C to stop, or
+    pause
 )
 echo   [OK] Required E*TRADE files found
 echo.

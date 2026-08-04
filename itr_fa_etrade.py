@@ -1257,8 +1257,19 @@ class ScheduleFAApp:
                 print("[i] Continuing without sold shares data")
                 df_sold = pd.DataFrame()
         else:
-            print("[i] G&L_Expanded.xlsx not found - this is OK if you didn't sell any shares")
-            print("[i] Continuing without sales data (Capital Gains sheet will be empty)")
+            print("")
+            print("=" * 70)
+            print("[WARNING] G&L_Expanded.xlsx not found!")
+            print("")
+            print("This file is REQUIRED if you sold ANY shares during the year.")
+            print("Without it:")
+            print("  - Table A3 will be INCOMPLETE (missing sold shares)")
+            print("  - Capital Gains will be EMPTY (missing tax calculations)")
+            print("")
+            print("Only continue if you are CERTAIN you had ZERO sales this year.")
+            print("=" * 70)
+            print("")
+            print("[i] Continuing without sales data...")
 
         equity_tranches = []
 
@@ -3107,13 +3118,31 @@ if __name__ == "__main__":
         # Read E*TRADE files to discover company symbols
         print("[*] Reading E*TRADE export files to discover companies...")
         df_open = pd.read_excel(BYSTATUS_FILE)
-        df_sold = pd.read_excel(GL_FILE)
+
+        # G&L file is optional - only read if it exists
+        df_sold = pd.DataFrame()  # Empty dataframe if no sales
+        if os.path.exists(GL_FILE):
+            df_sold = pd.read_excel(GL_FILE)
+        else:
+            print("")
+            print("=" * 70)
+            print("[WARNING] G&L_Expanded.xlsx not found!")
+            print("")
+            print("This file is REQUIRED if you sold ANY shares during the year.")
+            print("Without it:")
+            print("  - Table A3 will be INCOMPLETE (missing sold shares)")
+            print("  - Capital Gains will be EMPTY (missing tax calculations)")
+            print("")
+            print("Only continue if you are CERTAIN you had ZERO sales this year.")
+            print("=" * 70)
+            print("")
+            print("[i] Continuing without sales data...")
 
         # Auto-discover unique symbols from input files
         symbols = set()
         if 'Symbol' in df_open.columns:
             symbols.update(df_open['Symbol'].dropna().unique())
-        if 'Symbol' in df_sold.columns:
+        if not df_sold.empty and 'Symbol' in df_sold.columns:
             symbols.update(df_sold['Symbol'].dropna().unique())
 
         print(f"[OK] Discovered {len(symbols)} unique symbols: {', '.join(sorted(str(s).strip() for s in symbols))}")
@@ -3145,9 +3174,11 @@ if __name__ == "__main__":
         print()
 
         # Now process E*TRADE exports with updated config
+        # Pass None for GL_FILE if it doesn't exist
+        gl_file_to_use = GL_FILE if os.path.exists(GL_FILE) else None
         app.process_etrade_exports(
             bystatus_path=BYSTATUS_FILE,
-            gl_path=GL_FILE,
+            gl_path=gl_file_to_use,
             transaction_history_path=TRANSACTION_HISTORY_FILE,
             account_no=ACCOUNT_NUMBER,
             config=config
