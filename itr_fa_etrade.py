@@ -1257,7 +1257,8 @@ class ScheduleFAApp:
                 print("[i] Continuing without sold shares data")
                 df_sold = pd.DataFrame()
         else:
-            print("[i] G&L_Expanded.xlsx not found - assuming no sales in this financial year")
+            print("[i] G&L_Expanded.xlsx not found - this is OK if you didn't sell any shares")
+            print("[i] Continuing without sales data (Capital Gains sheet will be empty)")
 
         equity_tranches = []
 
