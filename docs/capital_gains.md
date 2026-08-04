@@ -360,26 +360,40 @@ From [Tax2Win](https://tax2win.in/guide/advance-tax):
 
 ### Grouped Advance Tax Schedule (New in v2.0)
 
-Our tool now **groups sales by applicable deadlines** instead of showing one aggregated row!
+Our tool now **groups sales by deadline periods** instead of showing one aggregated row!
 
 **Benefits:**
 1. ✅ Shows which sales go to which Financial Year
 2. ✅ Indicates which deadlines have already passed
 3. ✅ Clear payment planning by sale period
+4. ✅ Distinguishes between Advance Tax and Self-Assessment Tax
+
+**Grouping Logic:**
+
+Sales are grouped based on **which advance tax deadlines are still available AFTER the sale date**:
+
+| Group | Sale Period | Available Deadlines | Tax Type |
+|-------|-------------|---------------------|----------|
+| **1** | Apr 1 - Jul 15 | All 4 (Jul, Sep, Dec, Mar) | Advance Tax |
+| **2** | Jul 16 - Sep 15 | 3 (Sep, Dec, Mar) | Advance Tax |
+| **3** | Sep 16 - Dec 15 | 2 (Dec, Mar) | Advance Tax |
+| **4** | Dec 16 - Mar 15 | 1 (Mar only) | Advance Tax |
+| **5** | Mar 16 - Mar 31 | 0 (pay by Mar 31) | Self-Assessment Tax |
 
 **Example Output:**
 
-| Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | By Sep 15 | By Dec 15 | By Mar 15 | Note |
-|-------------|----------------|-----------------|-----------|-----------|-----------|-----------|------|
-| **Jan-Jun 2026** | FY 2026-27 | ₹1,40,654 | ₹21,100 | ₹63,296 | ₹1,05,492 | ₹1,40,654 | All 4 deadlines apply |
-| **Jul-Aug 2025** | FY 2025-26 | ₹50,000 | ₹0 | ₹22,500 | ₹37,500 | ₹50,000 | Jul 15 deadline passed |
-| **Sep-Nov 2025** | FY 2025-26 | ₹30,000 | ₹0 | ₹0 | ₹22,500 | ₹30,000 | Jul/Sep deadlines passed |
-| **Dec 2025-Mar 2026** | FY 2025-26 | ₹20,000 | ₹0 | ₹0 | ₹0 | ₹20,000 | Only Mar 15 deadline applies |
-| **TOTAL** | | **₹2,40,654** | **₹21,100** | **₹85,796** | **₹1,65,492** | **₹2,40,654** | Sum across all groups |
+| Sale Period | FY | Tax Type | Total Tax (INR) | By Jul 15 | By Sep 15 | By Dec 15 | By Mar 15 | Note |
+|-------------|---------|---------------|-----------------|-----------|-----------|-----------|-----------|------|
+| **Apr 1 - Jul 15, 2026** | FY 26-27 | Advance Tax | ₹1,40,654 | ₹21,100 | ₹63,296 | ₹1,05,492 | ₹1,40,654 | All 4 deadlines apply |
+| **Jul 16 - Sep 15, 2025** | FY 25-26 | Advance Tax | ₹50,000 | ₹0 | ₹22,500 | ₹37,500 | ₹50,000 | Jul 15 deadline passed |
+| **Sep 16 - Dec 15, 2025** | FY 25-26 | Advance Tax | ₹30,000 | ₹0 | ₹0 | ₹22,500 | ₹30,000 | Jul/Sep deadlines passed |
+| **Dec 16, 2025 - Mar 15, 2026** | FY 25-26 | Advance Tax | ₹20,000 | ₹0 | ₹0 | ₹0 | ₹20,000 | Only Mar 15 deadline applies |
+| **Mar 16-31, 2026** | FY 25-26 | Self-Assessment | ₹15,000 | ₹0 | ₹0 | ₹0 | ₹0 | Pay by Mar 31 |
+| **TOTAL** | | | **₹2,55,654** | **₹21,100** | **₹85,796** | **₹1,65,492** | **₹2,40,654** | Sum across all groups |
 
 **How to Use This:**
 
-**Group 1 (Jan-Jun Sales):** All 4 deadlines apply
+**Group 1 (Apr 1 - Jul 15 Sales):** All 4 deadlines apply - **Advance Tax**
 ```
 Jul 15: Pay ₹21,100 (15% of ₹1,40,654)
 Sep 15: Pay ₹42,196 more (cumulative 45%)
@@ -387,56 +401,78 @@ Dec 15: Pay ₹42,196 more (cumulative 75%)
 Mar 15: Pay ₹35,162 more (total 100%)
 ```
 
-**Group 2 (Jul-Aug Sales):** Only 3 deadlines apply (Jul passed)
+**Group 2 (Jul 16 - Sep 15 Sales):** Only 3 deadlines apply (Jul passed) - **Advance Tax**
 ```
 Sep 15: Pay ₹22,500 (45% of ₹50,000)
 Dec 15: Pay ₹15,000 more (cumulative 75%)
 Mar 15: Pay ₹12,500 more (total 100%)
 ```
 
-**Group 3 (Sep-Nov Sales):** Only 2 deadlines apply (Jul/Sep passed)
+**Group 3 (Sep 16 - Dec 15 Sales):** Only 2 deadlines apply (Jul/Sep passed) - **Advance Tax**
 ```
 Dec 15: Pay ₹22,500 (75% of ₹30,000)
 Mar 15: Pay ₹7,500 more (total 100%)
 ```
 
-**Group 4 (Dec-Mar Sales):** Only 1 deadline applies (only Mar left)
+**Group 4 (Dec 16 - Mar 15 Sales):** Only 1 deadline applies (only Mar left) - **Advance Tax**
 ```
 Mar 15: Pay ₹20,000 (100%)
 ```
+
+**Group 5 (Mar 16 - Mar 31 Sales):** No advance tax deadlines - **Self-Assessment Tax**
+```
+Mar 31: Pay ₹15,000 (100% - not advance tax, but self-assessment)
+```
+
+**Note:** Group 5 sales occur AFTER the last advance tax deadline (Mar 15), so they're paid as self-assessment tax by Mar 31 (end of FY).
 
 ---
 
 ### Calculation Logic
 
 ```python
-# Group sales by sale month to determine applicable deadlines
-if sale_month <= 6:  # Jan-Jun: All 4 deadlines apply
+# Group sales by deadline periods (not calendar months!)
+if sale_date >= Apr 1 and sale_date <= Jul 15:  # Group 1: All 4 deadlines
+    tax_type = "Advance Tax"
     jul_payment = tax × 15%
     sep_payment = tax × 45%
     dec_payment = tax × 75%
     mar_payment = tax × 100%
 
-elif sale_month <= 8:  # Jul-Aug: 3 deadlines (Jul passed)
+elif sale_date >= Jul 16 and sale_date <= Sep 15:  # Group 2: 3 deadlines (Jul passed)
+    tax_type = "Advance Tax"
     jul_payment = 0
     sep_payment = tax × 45%
     dec_payment = tax × 75%
     mar_payment = tax × 100%
 
-elif sale_month <= 11:  # Sep-Nov: 2 deadlines (Jul/Sep passed)
+elif sale_date >= Sep 16 and sale_date <= Dec 15:  # Group 3: 2 deadlines (Jul/Sep passed)
+    tax_type = "Advance Tax"
     jul_payment = 0
     sep_payment = 0
     dec_payment = tax × 75%
     mar_payment = tax × 100%
 
-else:  # Dec-Mar: Only Mar deadline applies
+elif sale_date >= Dec 16 and sale_date <= Mar 15:  # Group 4: Only Mar deadline
+    tax_type = "Advance Tax"
     jul_payment = 0
     sep_payment = 0
     dec_payment = 0
     mar_payment = tax × 100%
+
+else:  # Group 5 (Mar 16-31): Self-assessment tax
+    tax_type = "Self-Assessment Tax"
+    jul_payment = 0
+    sep_payment = 0
+    dec_payment = 0
+    mar_payment = 0
+    # Pay by Mar 31 instead
 ```
 
-**IMPORTANT:** All values rounded UP using `math.ceil()`
+**IMPORTANT:** 
+- All values rounded UP using `math.ceil()`
+- Periods are based on actual **deadlines**, not calendar months
+- Group 5 (Mar 16-31) is **Self-Assessment Tax**, not Advance Tax
 
 ## Example: Complete Calculation
 
