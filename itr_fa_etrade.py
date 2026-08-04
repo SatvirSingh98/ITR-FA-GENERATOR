@@ -2412,26 +2412,129 @@ class ScheduleFAApp:
             'Tax Amount (INR)': item['Tax Amount (INR)']
         } for item in capital_gains_data])
 
-        # Table 2: Advance Tax Schedule Summary (single row with totals)
+        # Table 2: Advance Tax Schedule - GROUPED by deadline applicability
+        # Group sales by which advance tax deadlines apply (based on sale date)
         if capital_gains_data:
-            total_tax = sum(item['Tax Amount (INR)'] for item in capital_gains_data)
-            total_adv_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in capital_gains_data)
-            total_adv_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in capital_gains_data)
-            total_adv_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in capital_gains_data)
-            total_adv_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in capital_gains_data)
+            # Group sales by sale month to determine applicable deadlines
+            advance_tax_rows = []
 
-            df_advance_tax = pd.DataFrame([{
-                'Description': 'TOTAL ADVANCE TAX SCHEDULE (Rule 234C)',
-                'Total Tax (INR)': total_tax,
-                'By Jul 15 (15%)': total_adv_jul,
-                'By Sep 15 (45%)': total_adv_sep,
-                'By Dec 15 (75%)': total_adv_dec,
-                'By Mar 15 (100%)': total_adv_mar
-            }])
+            # Group 1: Sales in Jan-Jun (before Jul 15) - All 4 deadlines apply
+            group1_sales = [item for item in capital_gains_data if pd.to_datetime(item['Sale Date']).month <= 6]
+            if group1_sales:
+                group1_tax = sum(item['Tax Amount (INR)'] for item in group1_sales)
+                group1_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group1_sales)
+                group1_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in group1_sales)
+                group1_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in group1_sales)
+                group1_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group1_sales)
+
+                # Get FY year from first sale in group
+                first_sale_date = pd.to_datetime(group1_sales[0]['Sale Date'])
+                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+
+                advance_tax_rows.append({
+                    'Sale Period': f'Jan-Jun {first_sale_date.year}',
+                    'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Total Tax (INR)': group1_tax,
+                    'By Jul 15': group1_jul,
+                    'By Sep 15': group1_sep,
+                    'By Dec 15': group1_dec,
+                    'By Mar 15': group1_mar,
+                    'Note': 'All 4 deadlines apply'
+                })
+
+            # Group 2: Sales in Jul-Aug (after Jul 15, before Sep 15) - 3 deadlines apply
+            group2_sales = [item for item in capital_gains_data if 7 <= pd.to_datetime(item['Sale Date']).month <= 8]
+            if group2_sales:
+                group2_tax = sum(item['Tax Amount (INR)'] for item in group2_sales)
+                group2_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group2_sales)  # Will be 0
+                group2_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in group2_sales)
+                group2_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in group2_sales)
+                group2_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group2_sales)
+
+                first_sale_date = pd.to_datetime(group2_sales[0]['Sale Date'])
+                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+
+                advance_tax_rows.append({
+                    'Sale Period': f'Jul-Aug {first_sale_date.year}',
+                    'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Total Tax (INR)': group2_tax,
+                    'By Jul 15': group2_jul,
+                    'By Sep 15': group2_sep,
+                    'By Dec 15': group2_dec,
+                    'By Mar 15': group2_mar,
+                    'Note': 'Jul 15 deadline passed'
+                })
+
+            # Group 3: Sales in Sep-Nov (after Sep 15, before Dec 15) - 2 deadlines apply
+            group3_sales = [item for item in capital_gains_data if 9 <= pd.to_datetime(item['Sale Date']).month <= 11]
+            if group3_sales:
+                group3_tax = sum(item['Tax Amount (INR)'] for item in group3_sales)
+                group3_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group3_sales)  # Will be 0
+                group3_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in group3_sales)  # Will be 0
+                group3_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in group3_sales)
+                group3_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group3_sales)
+
+                first_sale_date = pd.to_datetime(group3_sales[0]['Sale Date'])
+                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+
+                advance_tax_rows.append({
+                    'Sale Period': f'Sep-Nov {first_sale_date.year}',
+                    'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Total Tax (INR)': group3_tax,
+                    'By Jul 15': group3_jul,
+                    'By Sep 15': group3_sep,
+                    'By Dec 15': group3_dec,
+                    'By Mar 15': group3_mar,
+                    'Note': 'Jul/Sep deadlines passed'
+                })
+
+            # Group 4: Sales in Dec-Mar (after Dec 15) - Only Mar 15 deadline applies
+            group4_sales = [item for item in capital_gains_data if pd.to_datetime(item['Sale Date']).month >= 12 or pd.to_datetime(item['Sale Date']).month <= 3]
+            if group4_sales:
+                group4_tax = sum(item['Tax Amount (INR)'] for item in group4_sales)
+                group4_jul = sum(item['Adv Tax by Jul 15 (15%)'] for item in group4_sales)  # Will be 0
+                group4_sep = sum(item['Adv Tax by Sep 15 (45%)'] for item in group4_sales)  # Will be 0
+                group4_dec = sum(item['Adv Tax by Dec 15 (75%)'] for item in group4_sales)  # Will be 0
+                group4_mar = sum(item['Adv Tax by Mar 15 (100%)'] for item in group4_sales)
+
+                first_sale_date = pd.to_datetime(group4_sales[0]['Sale Date'])
+                fy_year = first_sale_date.year if first_sale_date.month >= 4 else first_sale_date.year - 1
+
+                advance_tax_rows.append({
+                    'Sale Period': f'Dec {first_sale_date.year}-Mar {first_sale_date.year + 1}',
+                    'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                    'Total Tax (INR)': group4_tax,
+                    'By Jul 15': group4_jul,
+                    'By Sep 15': group4_sep,
+                    'By Dec 15': group4_dec,
+                    'By Mar 15': group4_mar,
+                    'Note': 'Only Mar 15 deadline applies'
+                })
+
+            # Add TOTAL row at the end
+            if advance_tax_rows:
+                total_tax = int(sum(row['Total Tax (INR)'] for row in advance_tax_rows))
+                total_jul = int(sum(row['By Jul 15'] for row in advance_tax_rows))
+                total_sep = int(sum(row['By Sep 15'] for row in advance_tax_rows))
+                total_dec = int(sum(row['By Dec 15'] for row in advance_tax_rows))
+                total_mar = int(sum(row['By Mar 15'] for row in advance_tax_rows))
+
+                advance_tax_rows.append({
+                    'Sale Period': 'TOTAL',
+                    'Financial Year': '',
+                    'Total Tax (INR)': total_tax,
+                    'By Jul 15': total_jul,
+                    'By Sep 15': total_sep,
+                    'By Dec 15': total_dec,
+                    'By Mar 15': total_mar,
+                    'Note': 'Sum across all groups'
+                })
+
+            df_advance_tax = pd.DataFrame(advance_tax_rows)
         else:
             df_advance_tax = pd.DataFrame(columns=[
-                'Description', 'Total Tax (INR)', 'By Jul 15 (15%)',
-                'By Sep 15 (45%)', 'By Dec 15 (75%)', 'By Mar 15 (100%)'
+                'Sale Period', 'Financial Year', 'Total Tax (INR)', 'By Jul 15',
+                'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
             ])
 
         # If no sales, create empty DataFrames with columns
@@ -2709,7 +2812,8 @@ class ScheduleFAApp:
                 if sheet_name == "Capital Gains":
                     # Table 2 header and data (bold + colored)
                     table2_header_row = start_row_table2 + 1
-                    table2_data_row = start_row_table2 + 2
+                    table2_first_data_row = start_row_table2 + 2
+                    table2_last_data_row = start_row_table2 + 1 + len(df_advance_tax)
 
                     # Format Table 2 header
                     for cell in ws[table2_header_row]:
@@ -2718,14 +2822,24 @@ class ScheduleFAApp:
                             cell.font = header_font
                             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-                    # Format Table 2 data (total row)
-                    for cell in ws[table2_data_row]:
-                        if cell.value:
-                            cell.fill = total_fill
-                            cell.font = total_font
-                            cell.alignment = Alignment(horizontal='center', vertical='center')
-                            if isinstance(cell.value, (int, float)):
-                                cell.number_format = '"Rs."#,##0'  # No decimals for ITR format
+                    # Format ALL Table 2 data rows (multiple rows now, not just one)
+                    for row_num in range(table2_first_data_row, table2_last_data_row + 1):
+                        is_total_row = ws.cell(row_num, 1).value == 'TOTAL'
+
+                        for cell in ws[row_num]:
+                            if cell.value is not None:
+                                # TOTAL row: bold + colored background
+                                if is_total_row:
+                                    cell.fill = total_fill
+                                    cell.font = total_font
+
+                                cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                                # Force number format for numeric columns (prevents Excel date auto-conversion)
+                                if isinstance(cell.value, (int, float)) and cell.value != 0:
+                                    cell.number_format = '"Rs."#,##0'  # No decimals for ITR format
+                                elif isinstance(cell.value, (int, float)) and cell.value == 0:
+                                    cell.number_format = '"Rs."#,##0'  # Show 0 as Rs.0
 
                 # Freeze first row
                 ws.freeze_panes = ws['A2']
