@@ -15,13 +15,13 @@ QUICK START - 3 STEPS:
    - Export from E*TRADE:
      • ByStatus_expanded.xlsx
      • G&L_Expanded.xlsx
-   - Place in: inputs/ folder
+   - Place in: etrade_inputs/ folder
 
 3. RUN:
    - Double-click: GENERATE_ITR_FA.bat
    - Script auto-checks everything first
    - Wait ~1-2 minutes
-   - Check outputs/ folder
+   - Check etrade_outputs/ folder
 
 WHAT IT DOES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -33,7 +33,7 @@ WHAT IT DOES:
 ✓ Scrapes stock prices for full year
 ✓ Generates Schedule FA files
 
-OUTPUT FILES (in outputs/ folder):
+OUTPUT FILES (in etrade_outputs/ folder):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 - schedule_fa_2025-26.json  ← Upload to ITR portal

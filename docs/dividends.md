@@ -152,7 +152,7 @@ If Lot A sold 5 shares on Feb 20 (before March 15 dividend):
 2. Go to **Accounts → Transaction History**
 3. Select **Custom Time Period**: Calendar year (Jan 1 - Dec 31)
 4. Click **Download** icon (top right)
-5. Save as: `Transaction_History.csv` in `inputs/` folder
+5. Save as: `Transaction_History.csv` in `etrade_inputs/` folder
 
 ### What the Tool Does
 1. Reads `Transaction_History.csv` (optional - no error if missing)
@@ -211,7 +211,7 @@ No action needed! The tool works perfectly without Transaction History:
 
 ### If You Hold Dividend-Paying Stocks
 1. Download Transaction History CSV for calendar year
-2. Place in `inputs/Transaction_History.csv`
+2. Place in `etrade_inputs/Transaction_History.csv`
 3. Run the tool
 4. Verify in Excel output:
    - **Table A2:** Check if separate dividend row exists

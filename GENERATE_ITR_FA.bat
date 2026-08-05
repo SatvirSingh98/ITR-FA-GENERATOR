@@ -61,14 +61,14 @@ if not errorlevel 1 (
 )
 echo.
 
-echo [2/5] Checking inputs folder...
-if not exist inputs\ (
-    echo   [i] Creating inputs folder...
-    mkdir inputs
+echo [2/5] Checking E*TRADE inputs folder...
+if not exist etrade_inputs\ (
+    echo   [i] Creating etrade_inputs folder...
+    mkdir etrade_inputs
 )
-if not exist inputs\ByStatus_expanded.xlsx (
-    echo   [WARNING] ByStatus_expanded.xlsx not found in inputs/
-    echo   [i] Export from E*TRADE and place in inputs/ folder
+if not exist etrade_inputs\ByStatus_expanded.xlsx (
+    echo   [WARNING] ByStatus_expanded.xlsx not found in etrade_inputs/
+    echo   [i] Export from E*TRADE and place in etrade_inputs/ folder
     echo.
     pause
     exit /b 1
@@ -76,13 +76,13 @@ if not exist inputs\ByStatus_expanded.xlsx (
 echo   [OK] ByStatus_expanded.xlsx found
 echo.
 
-echo [3/5] Checking outputs folder...
-if not exist outputs\ (
-    echo   [i] Creating outputs folder...
-    mkdir outputs
+echo [3/5] Checking E*TRADE outputs folder...
+if not exist etrade_outputs\ (
+    echo   [i] Creating etrade_outputs folder...
+    mkdir etrade_outputs
 ) else (
-    echo   [i] Cleaning previous outputs...
-    del /Q outputs\* >nul 2>&1
+    echo   [i] Cleaning previous etrade_outputs...
+    del /Q etrade_outputs\* >nul 2>&1
 )
 echo   [OK] Outputs folder ready
 echo.
@@ -138,7 +138,7 @@ echo.
 
 echo [5/5] Checking for G^&L file (uses Python for reliable detection)...
 REM Check for G&L file using Python (more reliable than batch file escaping)
-venv\Scripts\python.exe -c "import os, sys; sys.exit(0 if os.path.exists('inputs/G&L_Expanded.xlsx') else 1)" 2>nul
+venv\Scripts\python.exe -c "import os, sys; sys.exit(0 if os.path.exists('etrade_inputs/G&L_Expanded.xlsx') else 1)" 2>nul
 if errorlevel 1 (
     echo.
     echo   ======================================================================
@@ -169,13 +169,13 @@ REM ============================================================
 
 echo.
 echo What will happen:
-echo   - Read E*TRADE files from inputs/
+echo   - Read E*TRADE files from etrade_inputs/
 echo   - Auto-discover company symbols
 echo   - Fetch company details from Yahoo Finance
 echo   - Auto-detect countries (USA, Canada, UK, etc.)
 echo   - Scrape stock prices for full year
 echo   - Download SBI TTBR exchange rates
-echo   - Generate 4 output files in outputs/
+echo   - Generate 4 output files in etrade_outputs/
 echo.
 echo This will take 1-2 minutes (web scraping)
 echo Chrome browser will open in background
@@ -203,7 +203,7 @@ echo ================================================================
 echo   SUCCESS! Schedule FA Generated
 echo ================================================================
 echo.
-echo Check the outputs/ folder for:
+echo Check the etrade_outputs/ folder for:
 echo   - schedule_fa_2025-26.json  (Review with CA)
 echo   - schedule_fa_2025-26.xlsx  (Review with CA)
 echo   - schedule_fa_2025-26_table_a2.csv  (Upload to ITR portal)

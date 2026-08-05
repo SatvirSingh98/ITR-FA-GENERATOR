@@ -708,14 +708,14 @@ class ScheduleFAApp:
         # Auto-find ClientStatements_*.pdf in inputs folder
         if client_statement_path is None:
             import glob
-            pattern = "inputs/ClientStatements_*.pdf"
+            pattern = "etrade_inputs/ClientStatements_*.pdf"
             matching_files = glob.glob(pattern)
 
             if matching_files:
                 client_statement_path = matching_files[0]  # Use first match
                 print(f"[*] Found ClientStatement: {client_statement_path}")
             else:
-                print(f"[i] No ClientStatement PDF found (inputs/ClientStatements_*.pdf)")
+                print(f"[i] No ClientStatement PDF found (etrade_inputs/ClientStatements_*.pdf)")
                 print(f"[i] Will use calculated closing balance from holdings")
                 return None
 
@@ -1138,17 +1138,17 @@ class ScheduleFAApp:
     def process_etrade_exports(self, bystatus_path=None, gl_path=None, transaction_history_path=None, account_no="146239025", config=None):
         # Default paths - check inputs folder first, then root folder
         if bystatus_path is None:
-            if os.path.exists("inputs/ByStatus_expanded.xlsx"):
-                bystatus_path = "inputs/ByStatus_expanded.xlsx"
+            if os.path.exists("etrade_inputs/ByStatus_expanded.xlsx"):
+                bystatus_path = "etrade_inputs/ByStatus_expanded.xlsx"
             elif os.path.exists("ByStatus_expanded.xlsx"):
                 bystatus_path = "ByStatus_expanded.xlsx"
             else:
-                raise FileNotFoundError("ByStatus_expanded.xlsx not found in 'inputs/' or root folder.")
+                raise FileNotFoundError("ByStatus_expanded.xlsx not found in 'etrade_inputs/' or root folder.")
 
         # G&L file is OPTIONAL - only needed if stocks were sold during the financial year
         if gl_path is None:
-            if os.path.exists("inputs/G&L_Expanded.xlsx"):
-                gl_path = "inputs/G&L_Expanded.xlsx"
+            if os.path.exists("etrade_inputs/G&L_Expanded.xlsx"):
+                gl_path = "etrade_inputs/G&L_Expanded.xlsx"
             elif os.path.exists("G&L_Expanded.xlsx"):
                 gl_path = "G&L_Expanded.xlsx"
             else:
@@ -1156,8 +1156,8 @@ class ScheduleFAApp:
 
         # Transaction History CSV is OPTIONAL - only needed if dividends were received
         if transaction_history_path is None:
-            if os.path.exists("inputs/Transaction_History.csv"):
-                transaction_history_path = "inputs/Transaction_History.csv"
+            if os.path.exists("etrade_inputs/Transaction_History.csv"):
+                transaction_history_path = "etrade_inputs/Transaction_History.csv"
             elif os.path.exists("Transaction_History.csv"):
                 transaction_history_path = "Transaction_History.csv"
             else:
@@ -1868,7 +1868,7 @@ class ScheduleFAApp:
 
         # Create outputs folder
         config = load_config()
-        output_dir = "outputs"
+        output_dir = "etrade_outputs"
         os.makedirs(output_dir, exist_ok=True)
 
         json_filename = os.path.join(output_dir, f"schedule_fa_{self.indian_fy}.json")
@@ -3097,9 +3097,9 @@ if __name__ == "__main__":
         ACCOUNT_NUMBER = ""  # Will be extracted from ClientStatement
 
     # Input file paths - auto-detect from inputs folder
-    BYSTATUS_FILE = "inputs/ByStatus_expanded.xlsx"
-    GL_FILE = "inputs/G&L_Expanded.xlsx"
-    TRANSACTION_HISTORY_FILE = "inputs/Transaction_History.csv"
+    BYSTATUS_FILE = "etrade_inputs/ByStatus_expanded.xlsx"
+    GL_FILE = "etrade_inputs/G&L_Expanded.xlsx"
+    TRANSACTION_HISTORY_FILE = "etrade_inputs/Transaction_History.csv"
 
     # Fallback to root if inputs folder doesn't have them
     if not os.path.exists(BYSTATUS_FILE):

@@ -12,7 +12,7 @@ Licensed under GPL-3.0 - see [LICENSE](LICENSE) for details.
 ## 🚀 Quick Start (2 Steps)
 
 ### Step 1: Add E*TRADE Files
-Place these files in `inputs/` folder:
+Place these files in `etrade_inputs/` folder:
 - `ByStatus_expanded.xlsx` (REQUIRED - shows current holdings)
 - `G&L_Expanded.xlsx` (REQUIRED if you sold ANY shares - contains sold shares for Table A3 + Capital Gains)
   - **Warning:** Without this file, Table A3 will be incomplete and Capital Gains will be empty
@@ -25,7 +25,7 @@ Double-click: **`GENERATE_ITR_FA.bat`**
 **First run:** Auto-creates venv, installs packages, generates files (~3-5 minutes)  
 **Next runs:** Just generates files (~1-2 minutes)
 
-Check `outputs/` folder for generated files.
+Check `etrade_outputs/` folder for generated files.
 
 ---
 
@@ -210,7 +210,7 @@ Edit `config.json`:
 
 ## Output Files
 
-Generated in `outputs/` folder:
+Generated in `etrade_outputs/` folder:
 
 1. **schedule_fa_2025-26.json** - Upload to ITR e-filing portal
 2. **schedule_fa_2025-26.xlsx** - Review with CA (10 beautifully formatted sheets):
@@ -293,8 +293,8 @@ Advance tax payment schedule (based on sale date):
 ## Before Sharing
 
 Removes your personal data:
-- E*TRADE files from `inputs/`
-- Schedule FA from `outputs/`
+- E*TRADE files from `etrade_inputs/`
+- Schedule FA from `etrade_outputs/`
 
 ---
 

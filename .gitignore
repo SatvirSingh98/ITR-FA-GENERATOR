@@ -1,11 +1,11 @@
-# Personal data - DO NOT COMMIT
-inputs/*.xlsx
-inputs/*.xls
-inputs/*.csv
-inputs/*.pdf
-outputs/*.json
-outputs/*.xlsx
-outputs/*.csv
+# Personal data - DO NOT COMMIT (E*TRADE)
+etrade_inputs/*.xlsx
+etrade_inputs/*.xls
+etrade_inputs/*.csv
+etrade_inputs/*.pdf
+etrade_outputs/*.json
+etrade_outputs/*.xlsx
+etrade_outputs/*.csv
 output_summary.txt
 
 #exclude your config.json
