@@ -243,7 +243,11 @@ Foreign company shares (RSU/ESPP) = **UNLISTED securities** (no STT on Indian ex
 
 **Tax Rates & Sections:**
 - **LTCG** (Long Term) - Holding > 24 months: **12.5% tax** (Section 112, no indexation)
-- **STCG** (Short Term) - Holding ≤ 24 months: **31.2% tax** (Section 48, slab rate)
+- **STCG** (Short Term) - Holding ≤ 24 months: **User's income tax slab rate** (Section 48)
+  - Script prompts for total taxable income bracket (11 options from ₹0-4L to ₹5Cr+)
+  - Automatically calculates: Base rate + Surcharge (if income > ₹50L) + 4% cess
+  - Effective rates range from 0% to 39.0% depending on income level
+  - Examples: ₹24L-50L → 31.2%, ₹60L → 34.32%, ₹1.5Cr → 35.88%, ₹3Cr → 39.0%
 
 ### Advance Tax Schedule (Income Tax Rule 234C)
 The Capital Gains sheet shows advance tax installments for:

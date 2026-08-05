@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableDelayedExpansion
 REM ================================================================
 REM ITR-FA-GENERATOR - Schedule FA Generator for ITR2
 REM Copyright (C) 2025 Satvir Singh
@@ -208,8 +209,56 @@ echo This will take 1-2 minutes (web scraping)
 echo Chrome browser will open in background
 echo.
 
+REM ============================================================
+REM Ask for Income Range (only if G&L file exists)
+REM Will calculate BOTH New and Old regime rates for comparison
+REM ============================================================
+if "%FILE_STATUS:~1,1%"=="1" (
+    echo ======================================================================
+    echo   SHORT-TERM CAPITAL GAINS TAX CALCULATION
+    echo ======================================================================
+    echo STCG on foreign stocks is taxed at your income tax slab rate.
+    echo.
+    echo The tool will calculate tax under BOTH regimes for comparison.
+    echo.
+    echo TIP: Check your Form-16 for "Total Taxable Income" to select the
+    echo      correct bracket. Include salary + other income sources.
+    echo.
+    echo Select your expected TOTAL TAXABLE INCOME for this year:
+    echo.
+    echo   1. Up to Rs. 4 lakhs
+    echo   2. Rs. 4-8 lakhs
+    echo   3. Rs. 8-12 lakhs
+    echo   4. Rs. 12-16 lakhs
+    echo   5. Rs. 16-20 lakhs
+    echo   6. Rs. 20-24 lakhs
+    echo   7. Rs. 24-50 lakhs
+    echo   8. Rs. 50 lakhs - 1 crore
+    echo   9. Rs. 1-2 crores
+    echo  10. Rs. 2-5 crores
+    echo  11. Above Rs. 5 crores
+    echo.
+    echo NOTE: This is only for STCG calculation. LTCG is fixed at 12.5%%.
+    echo ======================================================================
+    echo.
+
+    set /p INCOME_CHOICE="Enter your choice (1-11): "
+
+    REM Validate input - MUST use delayed expansion ! since we're inside a code block
+    if "!INCOME_CHOICE!"=="" (
+        echo [ERROR] No choice entered!
+        pause
+        exit /b 1
+    )
+    echo.
+) else (
+    REM No G&L file - no sales, so no STCG calculation needed
+    REM Pass empty value - Python will skip Capital Gains entirely
+    set INCOME_CHOICE=
+)
+
 echo [*] Starting Schedule FA generation...
-venv\Scripts\python.exe itr_fa_etrade.py > output_summary.txt 2>&1
+venv\Scripts\python.exe itr_fa_etrade.py --income-bracket %INCOME_CHOICE% > output_summary.txt 2>&1
 
 if errorlevel 1 (
     echo.

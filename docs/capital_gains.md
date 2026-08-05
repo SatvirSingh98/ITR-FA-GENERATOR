@@ -7,6 +7,61 @@ The **Capital Gains** sheet calculates tax liability on stock sales, categorized
 
 ---
 
+## Capital Gains Excel Sheet - Dual-Regime Comparison
+
+### Sheet Structure
+
+The Capital Gains sheet displays **TWO complete sections** for regime comparison:
+
+```
+Row 1:  [BLUE HEADER] NEW TAX REGIME - Capital Gains
+Row 2:  [TEAL HEADERS] Nature | Quantity | Acquisition Date | Sale Date | ...
+Rows 3-N: Sale details (alternating white/light blue rows)
+Row N+1: [DARK GRAY HEADERS] Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | ...
+Rows N+2-M: Advance tax schedule
+(Blank separator rows)
+Row M+1: [BLUE HEADER] OLD TAX REGIME - Capital Gains
+Row M+2: [TEAL HEADERS] Nature | Quantity | Acquisition Date | Sale Date | ...
+Rows M+3-P: Sale details (alternating white/light blue rows)
+Row P+1: [DARK GRAY HEADERS] Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | ...
+Rows P+2-Q: Advance tax schedule
+```
+
+### Professional Color Scheme
+
+**Headers:**
+- **Blue (#0277BD):** Regime section headers (NEW/OLD TAX REGIME)
+- **Teal (#00695C):** Sale details column headers
+- **Dark Gray (#455A64):** Advance tax column headers
+
+**Data Rows:**
+- **Sale Details:** Alternating white (#FFFFFF) and light blue (#E3F2FD)
+- **Advance Tax:** White background
+- **Separators:** Clean white space with NO borders
+
+**Border Rules:**
+- Regime headers: NO borders (clean banner look)
+- Sale details: All columns have borders
+- Advance tax headers: Borders only for columns A-I (data columns), J-N no borders
+- Advance tax data: Borders only for non-empty cells (columns A-I)
+- Separator rows: NO borders
+
+### Example Tax Comparison
+
+**Income Bracket: ₹16-20 lakhs**
+
+| Sale | Quantity | Capital Gain | New Regime Tax (20.8%) | Old Regime Tax (31.2%) | Savings |
+|------|----------|--------------|------------------------|------------------------|---------|
+| Stock | 26 shares | ₹2,31,888 | ₹48,233 | ₹72,350 | ₹24,117 |
+| Stock | 5 shares | ₹66,513 | ₹13,835 | ₹20,753 | ₹6,918 |
+| ESPP | 1 share | ₹16,784 | ₹3,492 | ₹5,237 | ₹1,745 |
+| ESPP | 5 shares | ₹1,35,619 | ₹28,209 | ₹42,314 | ₹14,105 |
+| **TOTAL** | - | **₹4,50,804** | **₹93,769** | **₹1,40,654** | **₹46,885** |
+
+**Tax Savings with New Regime:** ₹46,885 (33% less tax)
+
+---
+
 ## CRITICAL: Exchange Rate Rule - Income-tax Rule 115(1)(f)
 
 **Schedule CG uses a DIFFERENT exchange rate rule than Schedule FA!**
@@ -68,42 +123,130 @@ Classification: STCG (not "more than" 24 months)
 #### Short-Term Capital Gains (STCG)
 - **Holding Period:** ≤ 24 months
 - **Section:** 48
-- **Tax Rate:** 31.2% (slab rate: 30% + 4% cess)
+- **Tax Rate:** User's income tax slab rate (including surcharge and cess)
+- **Dual-Regime Calculation:** Tool automatically calculates tax under BOTH New and Old regimes for comparison
+
+##### Tax Rate Calculation - Dual Regime Approach
+
+**User Input:** Select expected TOTAL TAXABLE INCOME bracket (1-11 options)
+- **Tip:** Check Form-16 for "Total Taxable Income" (includes salary + other income sources)
+
+**Output:** Capital Gains sheet displays TWO separate tables side-by-side:
+1. **NEW TAX REGIME** - Sale details + Advance tax schedule
+2. **OLD TAX REGIME** - Sale details + Advance tax schedule
+
+This allows users to compare and decide which regime minimizes their tax liability.
+
+##### New Tax Regime Rates (FY 2025-26)
+
+**Base Slab Rates:**
+- Up to ₹4L: 0%
+- ₹4L-8L: 5%
+- ₹8L-12L: 10%
+- ₹12L-16L: 15%
+- ₹16L-20L: 20%
+- ₹20L-24L: 25%
+- Above ₹24L: 30%
+
+**Surcharge (on income tax):**
+- Up to ₹50L: Nil
+- ₹50L-1Cr: 10%
+- ₹1Cr-2Cr: 15%
+- ₹2Cr-5Cr: 25%
+- Above ₹5Cr: **25%** (max surcharge in New Regime)
+
+**Cess:** 4% on (base tax + surcharge)
+
+**Effective STCG Rates (New Regime):**
+| Income Bracket | Base + Surcharge + Cess | Effective Rate |
+|----------------|-------------------------|----------------|
+| Up to ₹4L | 0% + 0% + 0% | 0.0% |
+| ₹4L-8L | 5% + 0% + 4% cess | 5.2% |
+| ₹8L-12L | 10% + 0% + 4% cess | 10.4% |
+| ₹12L-16L | 15% + 0% + 4% cess | 15.6% |
+| ₹16L-20L | 20% + 0% + 4% cess | 20.8% |
+| ₹20L-24L | 25% + 0% + 4% cess | 26.0% |
+| ₹24L-50L | 30% + 0% + 4% cess | 31.2% |
+| ₹50L-1Cr | 30% + 10% + 4% cess | 34.32% |
+| ₹1Cr-2Cr | 30% + 15% + 4% cess | 35.88% |
+| ₹2Cr-5Cr | 30% + 25% + 4% cess | 39.0% |
+| Above ₹5Cr | 30% + 25% + 4% cess | 39.0% |
+
+##### Old Tax Regime Rates
+
+**Base Slab Rates (Different from New):**
+- Up to ₹2.5L: 0%
+- ₹2.5L-5L: 5%
+- ₹5L-10L: 20%
+- Above ₹10L: 30%
+
+**Surcharge (on income tax):**
+- Up to ₹50L: Nil
+- ₹50L-1Cr: 10%
+- ₹1Cr-2Cr: 15%
+- ₹2Cr-5Cr: 25%
+- Above ₹5Cr: **37%** (higher than New Regime!)
+
+**Cess:** 4% on (base tax + surcharge)
+
+**Effective STCG Rates (Old Regime):**
+| Income Bracket | Base + Surcharge + Cess | Effective Rate |
+|----------------|-------------------------|----------------|
+| Up to ₹4L | 0% (nil) | 0.0% |
+| ₹4L-8L | 5% + 0% + 4% cess | 5.2% |
+| ₹8L-12L | 20% + 0% + 4% cess | 20.8% (higher) |
+| ₹12L-16L | 30% + 0% + 4% cess | 31.2% (higher) |
+| ₹16L-20L | 30% + 0% + 4% cess | 31.2% (higher) |
+| ₹20L-24L | 30% + 0% + 4% cess | 31.2% (higher) |
+| ₹24L-50L | 30% + 0% + 4% cess | 31.2% (same) |
+| ₹50L-1Cr | 30% + 10% + 4% cess | 34.32% (same) |
+| ₹1Cr-2Cr | 30% + 15% + 4% cess | 35.88% (same) |
+| ₹2Cr-5Cr | 30% + 25% + 4% cess | 39.0% (same) |
+| Above ₹5Cr | 30% + 37% + 4% cess | **42.744%** (higher) |
+
+**Key Differences:**
+- Old Regime has 20% slab at ₹5L-10L → Higher tax for ₹8L-24L income
+- Old Regime has 37% surcharge above ₹5Cr → Higher tax for ultra-high earners
+- New Regime generally more favorable for ₹8L-5Cr income range
+
+**Example Comparison (Income: ₹16L-20L):**
+- New Regime: 20.8% → Save ₹10.4% on every rupee of STCG
+- Old Regime: 31.2%
+
 - **NOT applicable:** Section 111A (that's for STT-paid Indian listed equity)
 
 **Calculation:** Always rounded UP using `math.ceil()`
 
-**Implementation:** Lines 1525-1541 in `itr_fa_etrade.py`
+**Implementation:** 
+- Rate calculation: `calculate_stcg_rates_for_income()` function (lines 49-98)
+- Dual-regime tax computation: `calculate_tax_for_regime()` function (lines 2445-2491)
 
 ---
 
 ## ESPP Cost Basis - Section 49(2AA)
 
 ### The Rule
-**Section 49(2AA):** For ESPP shares, cost of acquisition = **FMV on purchase date** (already taxed as perquisite), NOT the discounted price you paid.
+**"If employer taxed the discount as perquisite → Cost basis = FMV on purchase date (NOT discounted purchase price)"**
 
-### Why It Matters
-**E*TRADE reports:**
-- "Adjusted Cost Basis" = discounted purchase price (e.g., $118.59 with 15% discount)
+**Per ITRFA.in:** "Section 49(2AA) says that if the employer has taxed the discount under section 17(2), the cost of acquisition for capital gains is the fair market value on the purchase date"
 
-**Indian Tax Law requires:**
-- Cost basis = FMV on purchase date (e.g., $152.39)
-- The discount was already taxed as perquisite in Form 16
-
-**Impact:**
-- Using discounted price = **DOUBLE TAXATION** of the discount amount!
-- For 15% ESPP discount on large sale: thousands of rupees in overpaid tax
-
-**Example:**
+### Example
 ```
-ESPP Purchase: 100 shares at 15% discount
-FMV: $152.39/share → Total FMV = $15,239
-Discounted Price: $118.59/share → Paid = $11,859
-Discount: $3,380 (already taxed as salary perquisite)
+Purchase Date: May 9, 2025
+FMV on purchase date: $152.39 per share
+Discounted price (15% off): $129.53 per share
 
-WRONG cost basis: $11,859 → Capital gain overstated by $3,380
-CORRECT cost basis: $15,239 → No double taxation
+E*TRADE shows:
+  - Adjusted Cost Basis: $129.53 (WRONG for Indian tax)
+  - Purchase Date Fair Mkt. Value: $152.39 (CORRECT for Indian tax)
+
+Use: $152.39 per share
 ```
+
+**Why:**
+1. You already paid income tax on the $22.86 discount ($152.39 - $129.53)
+2. Using $129.53 would tax you again on the same amount
+3. Section 49(2AA) prevents double taxation
 
 **RSU vs ESPP:**
 - **RSU:** "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
@@ -156,512 +299,348 @@ Sale proceeds: $264.50 × 5 = $1,322.50
 Capital gain: $582.75 (LARGE phantom gain!)
 ```
 
-**E*TRADE's Actual Matching (Correct):**
+**E*TRADE's Actual Lot Matching (Correct):**
 ```
-Sale matched to May 9, 2025 lot (the vested shares)
+E*TRADE matched to May 9, 2025 lot (same-day)
 Cost basis: $264.33 × 5 = $1,321.65
 Sale proceeds: $264.50 × 5 = $1,322.50
-Capital gain: $0.85 (near-zero, correct!)
+Capital gain: $0.85 (minimal gain - reflects reality)
 ```
 
-**Our Implementation:**
-```python
-# Read E*TRADE's "Date Acquired" column AS-IS from G&L_Expanded.xlsx
-acq_date = pd.to_datetime(row['Date Acquired']).strftime('%Y-%m-%d')
+**Impact:** FIFO would create a ₹49,000 phantom gain on a ₹72 actual gain!
 
-# We NEVER re-calculate FIFO - we trust E*TRADE's matching
-```
+**What We Do:**
+- Read `OpenDate`, `Quantity`, `OpenPrice USD` from G&L report
+- Use E*TRADE's lot assignment as-is
+- No FIFO enforcement or re-derivation
 
-**Legal Position:**
-- Foreign accounts: Specific lot identification is **legitimate and defensible**
-- E*TRADE's G&L report: **Already reflects their lot-relief method**
-- Our approach: **Report what actually happened**, not impose FIFO retroactively
+**Implementation:** Lines 1440-1460 in `itr_fa_etrade.py`
+
+### Step 3: Get Rule 115(1)(f) Exchange Rate
+
+**For each sale:**
+1. Get sale date (e.g., Aug 15, 2025)
+2. Calculate specified date = **last day of month BEFORE sale month** (Jul 31, 2025)
+3. Look up SBI TTBR for that date
+4. Use SAME rate for both sale proceeds AND cost basis
 
 **Example:**
 ```
-Acquisitions (from ByStatus_expanded.xlsx):
-- Nov 8, 2024: 10 shares (Lot A)
-- May 9, 2025: 17 shares (Lot B)
+Sale Date: Aug 15, 2025
+Specified Date: Jul 31, 2025 (last day of previous month)
+TTBR: 83.50 INR/USD (from SBI data)
 
-Sale (from G&L_Expanded.xlsx):
-- Date Sold: May 9, 2025
-- Quantity: 5 shares
-- Date Acquired: May 9, 2025  ← E*TRADE says this sale closed Lot B!
-
-We report: Sold 5 shares from Lot B (May 9, 2025 acquisition)
-We DON'T say: Sold 5 shares from Lot A (forced FIFO)
+Sale Proceeds: $1,322.50 × 83.50 = ₹1,10,429
+Cost Basis: $1,321.65 × 83.50 = ₹1,10,358
 ```
 
-### Step 3: Calculate Holding Period
+**Implementation:** Lines 1552-1602 in `itr_fa_etrade.py`
+
+### Step 4: Calculate Capital Gain
+
+```python
+capital_gain_inr = sale_proceeds_inr - cost_basis_inr
 ```
-Holding Period (months) = (Sale Date - Acquisition Date) / 30 days
+
+**Example:**
+```
+Sale Proceeds: ₹1,10,429
+Cost Basis: ₹1,10,358
+Capital Gain: ₹71
+```
+
+### Step 5: Classify as LTCG or STCG
+
+Calculate holding period in calendar months:
+```python
+holding_months = (sale_year - acq_year) * 12 + (sale_month - acq_month)
 ```
 
 **Classification:**
-- > 24 months → LTCG
-- ≤ 24 months → STCG
-
-### Step 4: Determine Rule 115(1)(f) Specified Date
-```python
-# Calculate last day of month BEFORE sale month
-if sale_month == 1:
-    specified_date = Dec 31 of previous year
-else:
-    specified_date = Last day of (sale_month - 1)
-```
+- `holding_months > 24` → LTCG (Section 112, 12.5% tax)
+- `holding_months ≤ 24` → STCG (Section 48, slab rate)
 
 **Example:**
-- Sale Date: Aug 15, {YEAR}
-- Sale Month: August (8)
-- **Specified Date = Jul 31, {YEAR}** (last day of July)
-
-### Step 5: Calculate Gross Proceeds (INR)
-```python
-# CRITICAL: Use Rule 115(1)(f) specified date TTBR, NOT sale date TTBR!
-Gross Proceeds (INR) = math.ceil(Quantity × Sale Price (USD) × TTBR on Specified Date)
+```
+Acquisition: May 9, 2025
+Sale: May 9, 2025 (same day)
+Holding: 0 months → STCG
 ```
 
-**Example:**
-- Sold: 10 shares on Aug 15, {YEAR}
-- Sale Price: $200 USD
-- Specified Date: Jul 31, {YEAR}
-- TTBR on Jul 31, {YEAR}: 84.50
-- **Gross Proceeds = ceil(10 × 200 × 84.50) = ₹1,69,000**
+### Step 6: Calculate Tax (Dual Regime)
 
-### Step 6: Calculate Cost Basis (INR)
+**For STCG sales:**
+
+1. **Determine tax rates based on income bracket** (from user selection)
+2. **Calculate tax for BOTH regimes:**
+
+**New Regime:**
 ```python
-# CRITICAL: Use SAME Rule 115(1)(f) specified date TTBR (NOT acquisition date TTBR!)
-Cost Basis (INR) = math.ceil(Quantity × Acquisition Price (USD) × TTBR on Specified Date)
+tax_new = math.ceil(capital_gain * stcg_rate_new)
 ```
 
-**Example:**
-- Acquired: 10 shares on {DATE}
-- Acquisition Price: $150 USD
-- **Specified Date: Jul 31, {YEAR}** (SAME as proceeds!)
-- TTBR on Jul 31, {YEAR}: 84.50 (SAME as proceeds!)
-- **Cost Basis = ceil(10 × 150 × 84.50) = ₹1,26,750**
-
-**CRITICAL:** Both proceeds and cost basis use the SAME specified date TTBR!
-
-### Step 7: Calculate Capital Gain
+**Old Regime:**
 ```python
-Capital Gain = Gross Proceeds - Cost Basis
+tax_old = math.ceil(capital_gain * stcg_rate_old)
 ```
 
-**Example:**
-- Gross Proceeds: ₹1,69,000
-- Cost Basis: ₹1,26,750
-- **Capital Gain = ₹42,250**
+3. **Create TWO separate sale detail tables** - one per regime
+4. **Calculate TWO separate advance tax schedules** - one per regime
 
-### Step 8: Calculate Tax
+**For LTCG sales:**
 ```python
-# For LTCG (>24 months)
-Tax = math.ceil(Capital Gain × 0.125)
-
-# For STCG (≤24 months)
-Tax = math.ceil(Capital Gain × 0.312)
+tax = math.ceil(capital_gain * 0.125)  # 12.5% for both regimes
 ```
 
-**Example (LTCG):**
-- Capital Gain: ₹46,000
-- Tax Rate: 12.5%
-- **Tax = ceil(46,000 × 0.125) = ₹5,750**
+**Example (STCG, Income ₹16L-20L):**
+```
+Capital Gain: ₹71
+
+New Regime Tax: ceil(₹71 × 20.8%) = ceil(₹14.768) = ₹15
+Old Regime Tax: ceil(₹71 × 31.2%) = ceil(₹22.152) = ₹23
+
+Savings with New Regime: ₹8
+```
+
+**Implementation:** 
+- Tax calculation: Lines 2471-2491 in `itr_fa_etrade.py`
+- Excel dual-table output: Lines 2775-2806 in `itr_fa_etrade.py`
+
+---
 
 ## Advance Tax Schedule (Income Tax Rule 234C)
 
-### Overview
+### Purpose
+Show when to pay advance tax for capital gains based on sale date.
 
-For capital gains realized during the Financial Year, advance tax must be paid in installments:
+### Payment Deadlines (within the Financial Year)
 
-| Due Date | Cumulative % | Amount (if total tax = ₹10,000) |
-|----------|--------------|--------------------------------|
-| **Jul 15** | 15% | ₹1,500 |
-| **Sep 15** | 45% | ₹4,500 |
-| **Dec 15** | 75% | ₹7,500 |
-| **Mar 15** | 100% | ₹10,000 |
+| Deadline | Cumulative % | Incremental % |
+|----------|--------------|---------------|
+| Jul 15 | 15% | 15% |
+| Sep 15 | 45% | 30% |
+| Dec 15 | 75% | 30% |
+| Mar 15 | 100% | 25% |
 
-**Sources:**
-- [ClearTax - Advance Tax FY 2026-27](https://cleartax.in/s/advance-tax)
-- [Tax2Win - Advance Tax Payment](https://tax2win.in/guide/advance-tax)
-- [TaxGuru - Advance Tax under Income Tax Act](https://taxguru.in/income-tax/advance-tax-income-tax-act-1961.html)
-- [TaxBuddy - Advance Tax Rules for Capital Gains](https://www.taxbuddy.com/blog/advance-tax-for-capital-gains-investors)
+### Rules Based on Sale Date
 
----
+**Group 1: Sales Apr 1 - Jul 15**
+- All 4 deadlines apply
+- Example: Sale on Jun 10 → Pay 15% by Jul 15, 45% by Sep 15, 75% by Dec 15, 100% by Mar 15
 
-### Special Rule for Capital Gains: No Penalty for Missing Earlier Installments!
+**Group 2: Sales Jul 16 - Sep 15**
+- Jul 15 deadline passed → Pay 0% by Jul 15
+- Remaining 3 deadlines apply
+- Example: Sale on Aug 20 → Pay 0% by Jul 15, 45% by Sep 15, 75% by Dec 15, 100% by Mar 15
 
-**CRITICAL:** Capital gains have a **special exemption** from interest penalties under Section 234C!
+**Group 3: Sales Sep 16 - Dec 15**
+- Jul 15 and Sep 15 deadlines passed
+- Remaining 2 deadlines apply
+- Example: Sale on Oct 30 → Pay 0% by Jul 15, 0% by Sep 15, 75% by Dec 15, 100% by Mar 15
 
-> **"If a taxpayer earns capital gains after one or more installment dates have passed, they are not liable to pay interest for the earlier installments. Instead, they must pay the full advance tax on such gains in the next immediate installment following the realization of income."**
->
-> — [ClearTax on Advance Tax](https://cleartax.in/s/advance-tax)
+**Group 4: Sales Dec 16 - Mar 15**
+- Only Mar 15 deadline applies
+- Example: Sale on Jan 20 → Pay 0% by Jul 15, 0% by Sep 15, 0% by Dec 15, 100% by Mar 15
 
-**What this means:**
-- ✅ Sale in **January** → Pay 100% by **Mar 15** → **No interest penalty** (Jul/Sep/Dec deadlines already passed)
-- ✅ Sale in **August** → Pay 100% by **Sep 15** → **No interest penalty** (Jul deadline already passed)
-- ✅ Sale in **October** → Pay 100% by **Dec 15** → **No interest penalty** (Jul/Sep deadlines already passed)
+**Group 5: Sales Mar 16 - Mar 31**
+- All deadlines passed
+- Pay as self-assessment tax by Mar 31 (ITR filing deadline)
+- Example: Sale on Mar 25 → Pay 0% advance tax, 100% by Mar 31 (self-assessment)
 
-**Key Point:** Pay by the **next deadline after the sale date** to avoid interest!
+### Future Sales (After Current FY)
 
----
-
-### Section 234C - Interest on Late/Short Payment
-
-**Rule:** 1% per month interest on short payment of advance tax installments
-
-**EXCEPTION for Capital Gains:**
-> "Interest under section 234C of the Act is not applicable on the shortfall in advance tax instalments provided such shortfall is on account of under-estimate or failure to estimate the amount of capital gains and **the whole of tax payable on such capital gains is paid by the advance tax payment deadline immediately due after the date when such capital gains arise.**"
->
-> — [TaxGuru on Advance Tax](https://taxguru.in/income-tax/advance-tax-income-tax-act-1961.html)
-
-**Examples:**
-
-| Sale Date | Next Deadline | Interest if Paid by Deadline | Interest if Paid After |
-|-----------|---------------|------------------------------|------------------------|
-| Jan 15, 2026 | Mar 15, 2026 | ✅ **No interest** | ❌ 1% per month from Apr 1 |
-| Jul 20, 2025 | Sep 15, 2025 | ✅ **No interest** | ❌ 1% per month from Sep 16 |
-| Oct 5, 2025 | Dec 15, 2025 | ✅ **No interest** | ❌ 1% per month from Dec 16 |
-
----
-
-### If No Installment Remains (Sale After Mar 15)
-
-From [India Filings](https://www.indiafilings.com/learn/advance-tax-payment):
-
-> **"When no installment is due, pay by 31st March of the relevant financial year to avoid interest."**
+The tool also includes **future sales** (sales after Mar 31 of current FY) to help plan advance tax for next year.
 
 **Example:**
-- Sale on **Mar 20, 2026** (after Mar 15 deadline)
-- Pay by **Mar 31, 2026** (self-assessment tax, not advance tax)
-- ✅ **No interest penalty**
+```
+Current FY: 2025-26 (Apr 1, 2025 - Mar 31, 2026)
+Sale Date: Jun 15, 2026 (next FY 2026-27)
+
+Marked as: "FUTURE" in Nature column
+Tax payable in: FY 2026-27
+Advance tax by: Jul 15, 2026 (15%), Sep 15, 2026 (45%), etc.
+```
+
+**Why helpful:**
+- Plan liquidity for tax payments
+- Know when to pay if shares sell in next FY
+- Estimate tax impact before exercising options
+
+### Dual-Regime Advance Tax Schedules
+
+Both New and Old regime calculations include separate advance tax schedules:
+
+**New Regime Advance Tax:**
+- Calculated from New Regime tax amounts
+- Shows payment schedule based on sale period
+- Includes FY designation (e.g., "FY 2026-27" for future sales)
+
+**Old Regime Advance Tax:**
+- Calculated from Old Regime tax amounts (higher for ₹8L-5Cr income)
+- Same payment schedule structure
+- Allows comparison of payment obligations
+
+**Example (Sale Apr 1 - Jul 15, 2026):**
+
+| Regime | Total Tax | By Jul 15 (15%) | By Sep 15 (45%) | By Dec 15 (75%) | By Mar 15 (100%) |
+|--------|-----------|-----------------|-----------------|-----------------|------------------|
+| **New** | ₹93,769 | ₹14,067 | ₹42,198 | ₹70,328 | ₹93,769 |
+| **Old** | ₹1,40,654 | ₹21,098 | ₹63,294 | ₹1,05,491 | ₹1,40,654 |
+
+**Implementation:** Lines 2538-2717 in `itr_fa_etrade.py`
 
 ---
 
-### Section 234B - Interest on Non-Payment/Short Payment of Total Tax
+## Excel Sheet Output - Detailed Structure
 
-**Rule:** If total advance tax paid < 90% of assessed tax → 1% per month interest from Apr 1
+### Table 1: NEW TAX REGIME - Sale Details
 
-**EXCEPTION:** Capital gains special rule applies here too!
+**Columns:**
+- Nature (e.g., "Stock (26 shares)", "ESPP (5 shares) - FUTURE")
+- Quantity
+- Acquisition Date
+- Sale Date
+- Rule 115(1)(f) Specified Date (last day of month before sale)
+- TTBR (INR/USD) (Rule 115(1)(f) rate)
+- Holding Period (months)
+- Tax Type (STCG/LTCG)
+- Section (48/112)
+- Cost Basis (INR)
+- Sale Proceeds (INR)
+- Capital Gain (INR)
+- Tax Rate (percentage)
+- Tax Amount (INR)
 
-From [Tax2Win](https://tax2win.in/guide/advance-tax):
+**Formatting:**
+- Header: Teal background (#00695C), white bold text
+- Data rows: Alternating white and light blue (#E3F2FD)
+- All columns: Borders, center-aligned
+- Currency columns: ₹ symbol, no decimals (ITR requirement)
 
-| Advance Tax Paid | Interest Under 234B |
-|------------------|---------------------|
-| **< 90% of total tax** | 1% per month from Apr 1 |
-| **≥ 90% of total tax** | No interest |
+### Table 2: NEW TAX REGIME - Advance Tax Schedule
 
-**Example:**
-- Total tax liability: ₹1,00,000 (all from capital gains)
-- Sale on Jan 15, 2026
-- Paid ₹1,00,000 by Mar 15, 2026
-- **Result:** ✅ No interest under 234B or 234C
+**Columns:**
+- Sale Period (e.g., "Apr 1 - Jul 15, 2026")
+- Financial Year (e.g., "FY 2026-27")
+- Tax Type ("Advance Tax" or "Self-Assessment Tax")
+- Total Tax (INR)
+- By Jul 15
+- By Sep 15
+- By Dec 15
+- By Mar 15
+- Note (e.g., "All 4 deadlines apply")
+
+**Formatting:**
+- Header: Dark gray background (#455A64), white bold text
+- Empty columns (J-N): No color, no borders
+- Data rows: White background, borders only in columns A-I
+- TOTAL row: Shows sum across all sale periods
+
+### Table 3: OLD TAX REGIME - Sale Details
+
+Same structure as Table 1, but with Old Regime tax rates and amounts.
+
+**Key Differences:**
+- Tax Rate column shows higher rates (e.g., 31.2% instead of 20.8%)
+- Tax Amount column shows higher amounts
+- Same sale data, different tax calculation
+
+### Table 4: OLD TAX REGIME - Advance Tax Schedule
+
+Same structure as Table 2, but with Old Regime tax amounts.
+
+**Key Differences:**
+- Total Tax (INR) is higher
+- All deadline amounts proportionally higher
+- TOTAL row shows higher cumulative tax
+
+### Separator Rows
+
+Between the two regime sections:
+- 5-6 blank rows
+- No borders, no colors
+- Clean visual separation
+
+### Visual Hierarchy
+
+**Level 1 - Regime Headers (Rows 1, 18):**
+- Color: Blue (#0277BD)
+- Font: Bold, 12pt, white
+- Borders: None (clean banner)
+- Alignment: Center
+
+**Level 2 - Sale Details Headers (Rows 2, 19):**
+- Color: Teal (#00695C)
+- Font: Bold, 11pt, white
+- Borders: All sides
+- Alignment: Center
+
+**Level 3 - Advance Tax Headers (Rows 10, 27):**
+- Color: Dark Gray (#455A64)
+- Font: Bold, 11pt, white
+- Borders: Only columns A-I (where headers exist)
+- Alignment: Center
+
+**Data Rows:**
+- Sale details: Alternating colors for readability
+- Advance tax: White background, selective borders
+- All data: Center-aligned
 
 ---
 
-### Grouped Advance Tax Schedule (New in v2.0)
+## Date Ranges
 
-Our tool now **groups sales by deadline periods** instead of showing one aggregated row!
+### Schedule FA (Table A3)
+**Period:** Calendar year ONLY (Jan 1 - Dec 31)
+- **Purpose:** Asset disclosure
+- **Includes:** Holdings as of Dec 31 (end of calendar year)
+- **Excludes:** Sales/acquisitions after Dec 31
 
-**Benefits:**
-1. ✅ Shows which sales go to which Financial Year
-2. ✅ Indicates which deadlines have already passed
-3. ✅ Clear payment planning by sale period
-4. ✅ Distinguishes between Advance Tax and Self-Assessment Tax
+### Capital Gains
+**Period:** Extended (Jan 1 - Mar 31 next year) + Future
+- **Current FY Sales:** Jan 1 - Mar 31 next year
+- **Future Sales:** Apr 1 onwards (marked as "FUTURE")
 
-**Grouping Logic:**
-
-Sales are grouped based on **which advance tax deadlines are still available AFTER the sale date**:
-
-| Group | Sale Period | Available Deadlines | Tax Type |
-|-------|-------------|---------------------|----------|
-| **1** | Apr 1 - Jul 15 | All 4 (Jul, Sep, Dec, Mar) | Advance Tax |
-| **2** | Jul 16 - Sep 15 | 3 (Sep, Dec, Mar) | Advance Tax |
-| **3** | Sep 16 - Dec 15 | 2 (Dec, Mar) | Advance Tax |
-| **4** | Dec 16 - Mar 15 | 1 (Mar only) | Advance Tax |
-| **5** | Mar 16 - Mar 31 | 0 (pay by Mar 31) | Self-Assessment Tax |
-
-**Example Output:**
-
-| Sale Period | FY | Tax Type | Total Tax (INR) | By Jul 15 | By Sep 15 | By Dec 15 | By Mar 15 | Note |
-|-------------|---------|---------------|-----------------|-----------|-----------|-----------|-----------|------|
-| **Apr 1 - Jul 15, 2026** | FY 26-27 | Advance Tax | ₹1,40,654 | ₹21,100 | ₹63,296 | ₹1,05,492 | ₹1,40,654 | All 4 deadlines apply |
-| **Jul 16 - Sep 15, 2025** | FY 25-26 | Advance Tax | ₹50,000 | ₹0 | ₹22,500 | ₹37,500 | ₹50,000 | Jul 15 deadline passed |
-| **Sep 16 - Dec 15, 2025** | FY 25-26 | Advance Tax | ₹30,000 | ₹0 | ₹0 | ₹22,500 | ₹30,000 | Jul/Sep deadlines passed |
-| **Dec 16, 2025 - Mar 15, 2026** | FY 25-26 | Advance Tax | ₹20,000 | ₹0 | ₹0 | ₹0 | ₹20,000 | Only Mar 15 deadline applies |
-| **Mar 16-31, 2026** | FY 25-26 | Self-Assessment | ₹15,000 | ₹0 | ₹0 | ₹0 | ₹0 | Pay by Mar 31 |
-| **TOTAL** | | | **₹2,55,654** | **₹21,100** | **₹85,796** | **₹1,65,492** | **₹2,40,654** | Sum across all groups |
-
-**How to Use This:**
-
-**Group 1 (Apr 1 - Jul 15 Sales):** All 4 deadlines apply - **Advance Tax**
-```
-Jul 15: Pay ₹21,100 (15% of ₹1,40,654)
-Sep 15: Pay ₹42,196 more (cumulative 45%)
-Dec 15: Pay ₹42,196 more (cumulative 75%)
-Mar 15: Pay ₹35,162 more (total 100%)
-```
-
-**Group 2 (Jul 16 - Sep 15 Sales):** Only 3 deadlines apply (Jul passed) - **Advance Tax**
-```
-Sep 15: Pay ₹22,500 (45% of ₹50,000)
-Dec 15: Pay ₹15,000 more (cumulative 75%)
-Mar 15: Pay ₹12,500 more (total 100%)
-```
-
-**Group 3 (Sep 16 - Dec 15 Sales):** Only 2 deadlines apply (Jul/Sep passed) - **Advance Tax**
-```
-Dec 15: Pay ₹22,500 (75% of ₹30,000)
-Mar 15: Pay ₹7,500 more (total 100%)
-```
-
-**Group 4 (Dec 16 - Mar 15 Sales):** Only 1 deadline applies (only Mar left) - **Advance Tax**
-```
-Mar 15: Pay ₹20,000 (100%)
-```
-
-**Group 5 (Mar 16 - Mar 31 Sales):** No advance tax deadlines - **Self-Assessment Tax**
-```
-Mar 31: Pay ₹15,000 (100% - not advance tax, but self-assessment)
-```
-
-**Note:** Group 5 sales occur AFTER the last advance tax deadline (Mar 15), so they're paid as self-assessment tax by Mar 31 (end of FY).
-
----
-
-### Calculation Logic
-
-```python
-# Group sales by deadline periods (not calendar months!)
-if sale_date >= Apr 1 and sale_date <= Jul 15:  # Group 1: All 4 deadlines
-    tax_type = "Advance Tax"
-    jul_payment = tax × 15%
-    sep_payment = tax × 45%
-    dec_payment = tax × 75%
-    mar_payment = tax × 100%
-
-elif sale_date >= Jul 16 and sale_date <= Sep 15:  # Group 2: 3 deadlines (Jul passed)
-    tax_type = "Advance Tax"
-    jul_payment = 0
-    sep_payment = tax × 45%
-    dec_payment = tax × 75%
-    mar_payment = tax × 100%
-
-elif sale_date >= Sep 16 and sale_date <= Dec 15:  # Group 3: 2 deadlines (Jul/Sep passed)
-    tax_type = "Advance Tax"
-    jul_payment = 0
-    sep_payment = 0
-    dec_payment = tax × 75%
-    mar_payment = tax × 100%
-
-elif sale_date >= Dec 16 and sale_date <= Mar 15:  # Group 4: Only Mar deadline
-    tax_type = "Advance Tax"
-    jul_payment = 0
-    sep_payment = 0
-    dec_payment = 0
-    mar_payment = tax × 100%
-
-else:  # Group 5 (Mar 16-31): Self-assessment tax
-    tax_type = "Self-Assessment Tax"
-    jul_payment = 0
-    sep_payment = 0
-    dec_payment = 0
-    mar_payment = 0
-    # Pay by Mar 31 instead
-```
-
-**IMPORTANT:** 
-- All values rounded UP using `math.ceil()`
-- Periods are based on actual **deadlines**, not calendar months
-- Group 5 (Mar 16-31) is **Self-Assessment Tax**, not Advance Tax
-
-## Example: Complete Calculation
-
-### Scenario
-**Sale Transaction:**
-- Symbol: AMD
-- Date: {DATE}
-- Quantity: 12 shares
-- Sale Price: $200 USD
-- TTBR on {DATE}: 84.50
-
-**Matched Acquisitions (FIFO):**
-1. **Tranche A:** 10 shares (acquired 30 months earlier)
-   - Acquisition Price: $150 USD
-   - Holding: 30 months → **LTCG**
-
-2. **Tranche B:** 2 shares (acquired 15 months earlier)
-   - Acquisition Price: $160 USD
-   - Holding: 15 months → **STCG**
-
-### Calculations
-
-#### Tranche A (LTCG)
-```
-Gross Proceeds = ceil(10 × 200 × 84.50) = ₹1,69,000
-Cost Basis = ceil(10 × 150 × 82.00) = ₹1,23,000
-Capital Gain = ₹1,69,000 - ₹1,23,000 = ₹46,000
-Tax (12.5%) = ceil(46,000 × 0.125) = ₹5,750
-```
-
-#### Tranche B (STCG)
-```
-Gross Proceeds = ceil(2 × 200 × 84.50) = ₹33,800
-Cost Basis = ceil(2 × 160 × 83.20) = ₹26,624
-Capital Gain = ₹33,800 - ₹26,624 = ₹7,176
-Tax (31.2%) = ceil(7,176 × 0.312) = ₹2,239
-```
-
-#### Total Tax
-```
-Total Tax = ₹5,750 (LTCG) + ₹2,239 (STCG) = ₹7,989
-```
-
-#### Advance Tax Schedule
-```
-Jul 15: ceil(7,989 × 0.15) = ₹1,199
-Sep 15: ceil(7,989 × 0.45) = ₹3,595
-Dec 15: ceil(7,989 × 0.75) = ₹5,992
-Mar 15: ₹7,989
-```
-
-## Excel Sheet Output
-
-The **"Capital Gains"** sheet contains:
-
-| Column | Description |
-|--------|-------------|
-| Nature | Type and quantity (e.g., "RSU (10 shares)", "ESPP (5 shares) - FUTURE") |
-| Quantity | Number of shares sold |
-| Acquisition Date | When those shares were acquired |
-| Sale Date | When shares were sold |
-| **Rule 115(1)(f) Specified Date** | Last day of month BEFORE sale month (exchange rate date) |
-| **TTBR (INR/USD)** | Exchange rate used (SAME for proceeds and cost basis) |
-| Holding Period (months) | Calendar months held |
-| Tax Type | LTCG or STCG |
-| **Section** | Section 112 (LTCG) or Section 48 (STCG) |
-| Cost Basis (INR) | Purchase cost in rupees (using specified date TTBR) |
-| Sale Proceeds (INR) | Sale value in rupees (using specified date TTBR) |
-| Capital Gain (INR) | Profit |
-| Tax Rate | 12.5% or 31.2% |
-| Tax Amount (INR) | Tax liability |
-
-Plus a summary section with:
-- Total Advance Tax Schedule (Rule 234C)
-- By Jul 15 (15%)
-- By Sep 15 (45%)
-- By Dec 15 (75%)
-- By Mar 15 (100%)
-
-## Extended Period: Calendar Year PLUS Next Q1
-
-### Why Extended Period?
-
-**Schedule FA (Table A3):** Calendar year only (Jan 1 - Dec 31, 2025)
-
-**Capital Gains:** **Extended period** (Jan 1, 2025 - Mar 31, 2026)
-
-**Reason:** Sales in Jan-Mar 2026 belong to the **same Indian Financial Year (FY 2025-26)**, so they need:
-- Tax calculation for the same FY
-- Advance tax planning during FY 2025-26
+**Why different?**
+- Schedule FA uses calendar year (CBDT filing instructions)
+- Capital Gains uses Indian Financial Year (Apr-Mar)
+- Jan-Mar sales of next year:
+  - Capital Gains: THIS year's ITR
+  - Schedule FA Table A3: NEXT year's ITR (asset was held on Dec 31)
 
 **Example:**
 ```
-FY 2025-26: Apr 1, 2025 to Mar 31, 2026
+Sale: Feb 15, 2026
 
-Capital Gains includes:
-- Jan 2025 - Dec 2025 (calendar year 2025)
-- Jan 2026 - Mar 2026 (Q1 of next calendar year)
+Capital Gains sheet:
+  - Appears in FY 2025-26 output
+  - Tax payable with Apr 2026 ITR filing
+  - Advance tax by Mar 15, 2026
 
-Why? All these sales fall in FY 2025-26!
+Schedule FA Table A3:
+  - Does NOT appear in FY 2025-26 (asset was sold)
+  - Would have appeared in FY 2024-25 if held on Dec 31, 2024
 ```
 
-### Date Filtering Logic
+---
 
-**Sales Included in Capital Gains:**
-- From: Jan 1, 2025 (calendar year start)
-- To: Mar 31, 2026 (end of FY 2025-26)
-- Total: **15 months** of sales
+## Verification Checklist
 
-**Sales Excluded:**
-- Before Jan 1, 2025 (previous calendar years, already reported)
-- After Mar 31, 2026 (next FY, will be reported next year)
-
-**Comparison:**
-
-| Sheet | Period | Duration | Example for FY 2025-26 |
-|-------|--------|----------|------------------------|
-| **Schedule FA (A3)** | Calendar year | 12 months | Jan 1, 2025 - Dec 31, 2025 |
-| **Capital Gains** | Extended | 15 months | Jan 1, 2025 - Mar 31, 2026 |
-
-### Example: Jan 2026 Sale
-
-**Sale Date:** Jan 15, 2026
-
-**Appears in:**
-- ❌ **Schedule FA (Table A3):** NO (calendar year 2025 ended Dec 31)
-- ✅ **Capital Gains:** YES (FY 2025-26 ends Mar 31, 2026)
-
-**Why?**
-- Table A3 reports holdings as of Dec 31, 2025 → Share was still held
-- Capital Gains reports sales in FY 2025-26 → Sale happened in same FY
-
-**Advance Tax:**
-- Sale in Jan 2026 → Belongs to FY 2025-26
-- Pay by Mar 15, 2026 (last deadline of FY 2025-26)
-- No interest penalty (special rule for capital gains)
-
-## Important Notes
-
-### 1. Always Round UP
-All tax amounts use `math.ceil()` to round up:
-```python
-# Never underpay
-math.ceil(5750.001) = 5751  ✓
-round(5750.001) = 5750      ✗ (risky - underpayment)
-```
-
-### 2. TTBR Date Matching - Rule 115(1)(f)
-**CRITICAL:** Schedule CG uses Income-tax Rule 115(1)(f), NOT exact dates!
-- **Both proceeds and cost basis:** Use TTBR on **last day of month BEFORE sale month**
-- **Same rate for both:** ONE specified date per sale, not separate dates
-- **Different from Schedule FA:** Schedule FA uses exact acquisition/sale dates
-- If TTBR missing for specified date, the script will fail (needs manual intervention)
-
-### 3. Lot Matching - E*TRADE's Actual Method Used
-- **FIFO is NOT mandatory for foreign brokerage accounts** (only for Indian demat accounts per Section 45(2A))
-- We use **E*TRADE's actual lot matching** from the Gains & Losses report
-- E*TRADE allows specific lot selection - we report whatever E*TRADE executed
-- This correctly handles RSU sell-to-cover and other specific lot sales
-
-### 4. Multiple Sales
-If you sold multiple times:
-- Each sale is processed separately
-- FIFO queue is maintained across all sales
-- Running total of unsold shares tracked
-
-### 5. Exchange Rate Impact
-Capital gains can vary significantly based on:
-- TTBR on acquisition date
-- TTBR on sale date
-
-**Example:**
-- Bought at TTBR 82, Sold at TTBR 86 → Higher INR gain
-- Bought at TTBR 86, Sold at TTBR 82 → Lower INR gain (or even loss!)
-
-## Verification Steps
-
-1. Open **"Capital Gains"** sheet in Excel
-2. Verify lot matching matches E*TRADE's Gains & Losses report (Acquisition Date column)
-3. Check holding period calculation (months)
-4. Confirm LTCG vs STCG classification
-5. Verify tax rate applied (12.5% or 31.2%)
+1. Check Rule 115(1)(f) dates are correct (last day of month BEFORE sale)
+2. Verify lot matching matches E*TRADE G&L report (no forced FIFO)
+3. Confirm ESPP uses "Purchase Date Fair Mkt. Value" (not Adjusted Cost Basis)
+4. Check holding period classification (LTCG vs STCG)
+5. Verify tax rates applied correctly for BOTH regimes
 6. Check all values rounded UP
-7. Verify advance tax schedule adds up to total tax
+7. Verify advance tax schedule adds up to total tax for BOTH regimes
+8. Compare New vs Old regime tax amounts
+9. Verify future sales are marked "- FUTURE" in Nature column
+10. Check Excel formatting (colors, borders, alignment)
 
 ## Common Questions
 
 **Q: What if I have losses?**
-A: Losses are calculated the same way (negative capital gain). Can be set off against other capital gains.
+A: Losses are calculated the same way (negative capital gain). Can be set off against other capital gains. Both regime tables will show the loss.
 
 **Q: What if holding period is exactly 24 months?**
 A: 24 months = STCG (must be **more than** 24 for LTCG)
@@ -674,3 +653,21 @@ A: For foreign brokerage accounts like E*TRADE, **YES** - you can use specific l
 
 **Q: What if TTBR is missing for sale date?**
 A: Script will error out - you need to manually add that date's TTBR to the CSV
+
+**Q: Which regime should I choose?**
+A: The tool shows BOTH regime calculations side-by-side. Compare total tax amounts and choose the regime with lower tax. Generally:
+- New Regime is better for ₹8L-50L income
+- Old Regime MAY be better if you have large deductions (80C, 80D, etc.)
+- Consult your CA for final decision
+
+**Q: Do I have to pay tax under both regimes?**
+A: NO! You choose ONE regime when filing ITR. The tool shows both to help you decide. Once you pick a regime for the year, you pay tax according to that regime's rates.
+
+**Q: Can I change regimes mid-year?**
+A: NO. You choose one regime for the entire Financial Year when filing ITR. The regime choice applies to ALL your income for that year.
+
+**Q: How accurate is the advance tax schedule?**
+A: The schedule is calculated per Rule 234C and is accurate for tax planning. However, consult your CA before making actual payments, as your total tax liability may include other income sources.
+
+**Q: What if my income changes after I selected the bracket?**
+A: Re-run the tool with the correct income bracket. The Capital Gains sheet will regenerate with updated tax rates for both regimes.

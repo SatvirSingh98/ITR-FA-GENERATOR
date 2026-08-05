@@ -33,6 +33,8 @@ Requirements:
 
 import json
 import os
+import sys
+import argparse
 import pandas as pd
 from datetime import datetime
 import time
@@ -41,6 +43,59 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 import requests
+
+warnings.filterwarnings('ignore')
+
+def calculate_stcg_rates_for_income(income_bracket):
+    """
+    Calculate STCG rates for BOTH New and Old tax regimes based on income bracket.
+
+    Args:
+        income_bracket (str): Income bracket choice (1-11)
+
+    Returns:
+        tuple: (new_regime_rate, old_regime_rate, new_display, old_display)
+    """
+    bracket = income_bracket.strip()
+
+    # Income bracket to New Regime rate mapping
+    new_regime_rates = {
+        '1': (0.0, "0% (Nil)"),
+        '2': (0.052, "5.2% (5% + 4% cess)"),
+        '3': (0.104, "10.4% (10% + 4% cess)"),
+        '4': (0.156, "15.6% (15% + 4% cess)"),
+        '5': (0.208, "20.8% (20% + 4% cess)"),
+        '6': (0.260, "26.0% (25% + 4% cess)"),
+        '7': (0.312, "31.2% (30% + 4% cess)"),
+        '8': (0.3432, "34.32% (30% + 10% surcharge + 4% cess)"),
+        '9': (0.3588, "35.88% (30% + 15% surcharge + 4% cess)"),
+        '10': (0.390, "39.0% (30% + 25% surcharge + 4% cess)"),
+        '11': (0.390, "39.0% (30% + 25% surcharge + 4% cess)"),
+    }
+
+    # Income bracket to Old Regime rate mapping
+    # Old regime has different base slabs up to Rs 10L
+    old_regime_rates = {
+        '1': (0.0, "0% (Nil)"),  # Up to 4L (old has 2.5L, but effectively 0 for both)
+        '2': (0.052, "5.2% (5% + 4% cess)"),  # 4-8L (old: 2.5-5L at 5%)
+        '3': (0.208, "20.8% (20% + 4% cess)"),  # 8-12L (old: 5-10L at 20%)
+        '4': (0.312, "31.2% (30% + 4% cess)"),  # 12-16L (old: >10L at 30%)
+        '5': (0.312, "31.2% (30% + 4% cess)"),  # 16-20L
+        '6': (0.312, "31.2% (30% + 4% cess)"),  # 20-24L
+        '7': (0.312, "31.2% (30% + 4% cess)"),  # 24-50L
+        '8': (0.3432, "34.32% (30% + 10% surcharge + 4% cess)"),  # 50L-1Cr
+        '9': (0.3588, "35.88% (30% + 15% surcharge + 4% cess)"),  # 1Cr-2Cr
+        '10': (0.390, "39.0% (30% + 25% surcharge + 4% cess)"),  # 2Cr-5Cr
+        '11': (0.42744, "42.744% (30% + 37% surcharge + 4% cess)"),  # Above 5Cr
+    }
+
+    if bracket not in new_regime_rates:
+        raise ValueError(f"Invalid income bracket: {bracket}")
+
+    new_rate, new_display = new_regime_rates[bracket]
+    old_rate, old_display = old_regime_rates[bracket]
+
+    return new_rate, old_rate, new_display, old_display
 
 warnings.filterwarnings('ignore')
 
@@ -89,12 +144,18 @@ class ScheduleFAApp:
         # Remove other problematic characters if needed
         return text.strip()
 
-    def __init__(self, calendar_year=None):
+    def __init__(self, calendar_year=None, stcg_rate_new=0.312, stcg_rate_old=0.312):
         """
         :param calendar_year: e.g. 2024, 2025, 2026. If None, defaults to the previous calendar year.
+        :param stcg_rate_new: STCG tax rate for New Tax Regime (default 31.2% for 30% bracket)
+        :param stcg_rate_old: STCG tax rate for Old Tax Regime (default 31.2% for 30% bracket)
         """
         current_year = datetime.now().year
         self.calendar_year = calendar_year if calendar_year else (current_year - 1)
+        self.stcg_rate_new = stcg_rate_new  # Store New Regime STCG rate
+        self.stcg_rate_old = stcg_rate_old  # Store Old Regime STCG rate
+        # For backward compatibility
+        self.stcg_tax_rate = stcg_rate_new
 
         # Schedule FA uses CALENDAR YEAR (Jan 1 - Dec 31)
         self.start_date = f"{self.calendar_year}-01-01"
@@ -2202,7 +2263,7 @@ class ScheduleFAApp:
                 else:
                     tax_type = "STCG"
                     tax_section = "Section 48"
-                    tax_rate = 0.312  # 31.2% (slab rate, assuming 30% + 4% cess)
+                    tax_rate = self.stcg_tax_rate  # User's income tax slab rate (selected at start)
 
                 # Calculate proceeds and cost basis in INR
                 import math
@@ -2262,50 +2323,24 @@ class ScheduleFAApp:
                 gross_proceeds = math.ceil(proceeds_usd * specified_ttbr)  # Round UP proceeds
                 cost_basis = math.ceil(cost_basis_usd * specified_ttbr)  # Round UP cost basis (same rate!)
                 capital_gain = gross_proceeds - cost_basis  # Already rounded up
-                tax_amount = math.ceil(capital_gain * tax_rate)  # Round UP tax
 
-                # Calculate advance tax schedule based on sale date (always round UP)
-                sale_month = sale_date.month
-                if sale_month <= 6:  # Sold before July 15
-                    adv_tax_jul = math.ceil(tax_amount * 0.15)
-                    adv_tax_sep = math.ceil(tax_amount * 0.45)
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                elif sale_month <= 8:  # Sold between July 16 - Sep 15
-                    adv_tax_jul = 0
-                    adv_tax_sep = math.ceil(tax_amount * 0.45)
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                elif sale_month <= 11:  # Sold between Sep 16 - Dec 15
-                    adv_tax_jul = 0
-                    adv_tax_sep = 0
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                else:  # Sold between Dec 16 - Mar 15
-                    adv_tax_jul = 0
-                    adv_tax_sep = 0
-                    adv_tax_dec = 0
-                    adv_tax_mar = tax_amount
-
+                # Store base info WITHOUT tax calculation (will calculate for both regimes later)
                 capital_gains_data.append({
                     'Nature': nature,
                     'Quantity': qty,
                     'Acquisition Date': acq_date_str,
                     'Sale Date': sale_date_str,
-                    'Rule 115(1)(f) Specified Date': specified_date,  # Exchange rate date
-                    'TTBR (INR/USD)': round(specified_ttbr, 2),  # Exchange rate used
+                    'Rule 115(1)(f) Specified Date': specified_date,
+                    'TTBR (INR/USD)': round(specified_ttbr, 2),
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
                     'Section': tax_section,
-                    'Cost Basis (INR)': cost_basis,  # Rounded up
-                    'Sale Proceeds (INR)': gross_proceeds,  # Rounded up
-                    'Capital Gain (INR)': capital_gain,  # Rounded up
-                    'Tax Rate': f"{tax_rate*100}%",
-                    'Tax Amount (INR)': tax_amount,  # Rounded up
-                    'Adv Tax by Jul 15 (15%)': adv_tax_jul,  # Rounded up
-                    'Adv Tax by Sep 15 (45%)': adv_tax_sep,  # Rounded up
-                    'Adv Tax by Dec 15 (75%)': adv_tax_dec,  # Rounded up
-                    'Adv Tax by Mar 15 (100%)': adv_tax_mar  # Rounded up
+                    'Cost Basis (INR)': cost_basis,
+                    'Sale Proceeds (INR)': gross_proceeds,
+                    'Capital Gain (INR)': capital_gain,
+                    # Tax calculation done separately for both regimes
+                    'STCG_Rate_New': self.stcg_rate_new if tax_type == "STCG" else 0.125,
+                    'STCG_Rate_Old': self.stcg_rate_old if tax_type == "STCG" else 0.125,
                 })
 
         # Add future sales (after current FY) for advance tax planning
@@ -2386,63 +2421,83 @@ class ScheduleFAApp:
                 gross_proceeds = math.ceil(proceeds_usd * specified_ttbr)
                 cost_basis = math.ceil(cost_basis_usd * specified_ttbr)  # Same rate!
                 capital_gain = gross_proceeds - cost_basis
-                tax_amount = math.ceil(capital_gain * tax_rate)
 
-                # Calculate advance tax schedule for NEXT FY based on sale date
-                # The sale date determines which installment applies
-                sale_month = sale_date.month
-                if sale_month <= 6:
-                    adv_tax_jul = math.ceil(tax_amount * 0.15)
-                    adv_tax_sep = math.ceil(tax_amount * 0.45)
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                elif sale_month <= 8:
-                    adv_tax_jul = 0
-                    adv_tax_sep = math.ceil(tax_amount * 0.45)
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                elif sale_month <= 11:
-                    adv_tax_jul = 0
-                    adv_tax_sep = 0
-                    adv_tax_dec = math.ceil(tax_amount * 0.75)
-                    adv_tax_mar = tax_amount
-                else:
-                    adv_tax_jul = 0
-                    adv_tax_sep = 0
-                    adv_tax_dec = 0
-                    adv_tax_mar = tax_amount
-
+                # Store base info WITHOUT tax calculation (will calculate for both regimes later)
                 capital_gains_data.append({
                     'Nature': nature,
                     'Quantity': qty,
                     'Acquisition Date': acq_date_str,
                     'Sale Date': sale_date_str,
-                    'Rule 115(1)(f) Specified Date': specified_date,  # Exchange rate date
-                    'TTBR (INR/USD)': round(specified_ttbr, 2),  # Exchange rate used
+                    'Rule 115(1)(f) Specified Date': specified_date,
+                    'TTBR (INR/USD)': round(specified_ttbr, 2),
                     'Holding Period (months)': holding_months,
                     'Tax Type': tax_type,
                     'Section': tax_section,
                     'Cost Basis (INR)': cost_basis,
                     'Sale Proceeds (INR)': gross_proceeds,
                     'Capital Gain (INR)': capital_gain,
-                    'Tax Rate': f"{tax_rate*100}%",
-                    'Tax Amount (INR)': tax_amount,
-                    'Adv Tax by Jul 15 (15%)': adv_tax_jul,
-                    'Adv Tax by Sep 15 (45%)': adv_tax_sep,
-                    'Adv Tax by Dec 15 (75%)': adv_tax_dec,
-                    'Adv Tax by Mar 15 (100%)': adv_tax_mar
+                    # Tax calculation done separately for both regimes
+                    'STCG_Rate_New': self.stcg_rate_new if tax_type == "STCG" else 0.125,
+                    'STCG_Rate_Old': self.stcg_rate_old if tax_type == "STCG" else 0.125,
                 })
 
-        # Generate Schedule OS and FSI
+        # Helper function to calculate tax and advance tax for a given rate
+        def calculate_tax_for_regime(sales_data, regime_name, use_old_regime=False):
+            import math
+            result = []
+            for item in sales_data:
+                # Get appropriate tax rate
+                tax_rate = item['STCG_Rate_Old'] if use_old_regime else item['STCG_Rate_New']
+                capital_gain = item['Capital Gain (INR)']
+                tax_amount = math.ceil(capital_gain * tax_rate)
+
+                # Calculate advance tax schedule
+                sale_date = pd.to_datetime(item['Sale Date'])
+                sale_month = sale_date.month
+                if sale_month <= 6:
+                    adv_jul = math.ceil(tax_amount * 0.15)
+                    adv_sep = math.ceil(tax_amount * 0.45)
+                    adv_dec = math.ceil(tax_amount * 0.75)
+                    adv_mar = tax_amount
+                elif sale_month <= 8:
+                    adv_jul = 0
+                    adv_sep = math.ceil(tax_amount * 0.45)
+                    adv_dec = math.ceil(tax_amount * 0.75)
+                    adv_mar = tax_amount
+                elif sale_month <= 11:
+                    adv_jul = 0
+                    adv_sep = 0
+                    adv_dec = math.ceil(tax_amount * 0.75)
+                    adv_mar = tax_amount
+                else:
+                    adv_jul = 0
+                    adv_sep = 0
+                    adv_dec = 0
+                    adv_mar = tax_amount
+
+                result.append({
+                    **item,  # Include all base fields
+                    'Tax Rate': f"{tax_rate*100}%",
+                    'Tax Amount (INR)': tax_amount,
+                    'Adv Tax by Jul 15 (15%)': adv_jul,
+                    'Adv Tax by Sep 15 (45%)': adv_sep,
+                    'Adv Tax by Dec 15 (75%)': adv_dec,
+                    'Adv Tax by Mar 15 (100%)': adv_mar,
+                })
+            return result
+
+        # Calculate for BOTH regimes
+        capital_gains_new_regime = calculate_tax_for_regime(capital_gains_data, "New Regime", use_old_regime=False)
+        capital_gains_old_regime = calculate_tax_for_regime(capital_gains_data, "Old Regime", use_old_regime=True)
+
+        # Generate Schedule OS and FSI (use New Regime data for now)
         print(f"\n[*] Generating Schedule OS and Schedule FSI...")
-        df_schedule_os, df_schedule_fsi, df_div_os = self._calculate_schedule_os_fsi(df_dividends, pd.DataFrame(capital_gains_data))
+        df_schedule_os, df_schedule_fsi, df_div_os = self._calculate_schedule_os_fsi(df_dividends, pd.DataFrame(capital_gains_new_regime))
         print(f"[OK] Schedule OS: Total dividend income Rs.{df_schedule_os[self.indian_fy][2]:,}" if len(df_schedule_os) > 2 else "[OK] Schedule OS: No dividends")
         print(f"[OK] Schedule FSI: Total foreign income Rs.{df_schedule_fsi[self.indian_fy][3]:,}" if len(df_schedule_fsi) > 3 else "[OK] Schedule FSI: No foreign income")
 
-        # Create two separate tables for Capital Gains sheet
-
-        # Table 1: Sale Details (without advance tax columns)
-        df_sale_details = pd.DataFrame([{
+        # Create sale details DataFrames for BOTH regimes
+        df_sale_details_new = pd.DataFrame([{
             'Nature': item['Nature'],
             'Quantity': item['Quantity'],
             'Acquisition Date': item['Acquisition Date'],
@@ -2457,11 +2512,38 @@ class ScheduleFAApp:
             'Capital Gain (INR)': item['Capital Gain (INR)'],
             'Tax Rate': item['Tax Rate'],
             'Tax Amount (INR)': item['Tax Amount (INR)']
-        } for item in capital_gains_data])
+        } for item in capital_gains_new_regime])
+
+        df_sale_details_old = pd.DataFrame([{
+            'Nature': item['Nature'],
+            'Quantity': item['Quantity'],
+            'Acquisition Date': item['Acquisition Date'],
+            'Sale Date': item['Sale Date'],
+            'Rule 115(1)(f) Specified Date': item['Rule 115(1)(f) Specified Date'],
+            'TTBR (INR/USD)': item['TTBR (INR/USD)'],
+            'Holding Period (months)': item['Holding Period (months)'],
+            'Tax Type': item['Tax Type'],
+            'Section': item['Section'],
+            'Cost Basis (INR)': item['Cost Basis (INR)'],
+            'Sale Proceeds (INR)': item['Sale Proceeds (INR)'],
+            'Capital Gain (INR)': item['Capital Gain (INR)'],
+            'Tax Rate': item['Tax Rate'],
+            'Tax Amount (INR)': item['Tax Amount (INR)']
+        } for item in capital_gains_old_regime])
+
+        # For backward compatibility, keep df_sale_details as New Regime
+        df_sale_details = df_sale_details_new
 
         # Table 2: Advance Tax Schedule - GROUPED by deadline applicability
-        # Group sales by which advance tax deadlines are still available AFTER sale date
-        if capital_gains_data:
+        # Helper function to calculate advance tax for any regime
+        def calculate_advance_tax_schedule(capital_gains_list):
+            """Calculate advance tax schedule for a given capital gains list."""
+            if not capital_gains_list:
+                return pd.DataFrame(columns=[
+                    'Sale Period', 'Financial Year', 'Tax Type', 'Total Tax (INR)', 'By Jul 15',
+                    'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
+                ])
+
             advance_tax_rows = []
 
             # Helper function to get FY year from a date
@@ -2469,7 +2551,7 @@ class ScheduleFAApp:
                 return date.year if date.month >= 4 else date.year - 1
 
             # Group 1: Sales from Apr 1 to Jul 15 - All 4 deadlines apply
-            group1_sales = [item for item in capital_gains_data
+            group1_sales = [item for item in capital_gains_list
                            if (pd.to_datetime(item['Sale Date']).month >= 4 and pd.to_datetime(item['Sale Date']).month <= 6) or
                               (pd.to_datetime(item['Sale Date']).month == 7 and pd.to_datetime(item['Sale Date']).day <= 15)]
             if group1_sales:
@@ -2496,7 +2578,7 @@ class ScheduleFAApp:
                 })
 
             # Group 2: Sales from Jul 16 to Sep 15 - 3 deadlines (Jul passed)
-            group2_sales = [item for item in capital_gains_data
+            group2_sales = [item for item in capital_gains_list
                            if (pd.to_datetime(item['Sale Date']).month == 7 and pd.to_datetime(item['Sale Date']).day > 15) or
                               (pd.to_datetime(item['Sale Date']).month == 8) or
                               (pd.to_datetime(item['Sale Date']).month == 9 and pd.to_datetime(item['Sale Date']).day <= 15)]
@@ -2523,7 +2605,7 @@ class ScheduleFAApp:
                 })
 
             # Group 3: Sales from Sep 16 to Dec 15 - 2 deadlines (Jul/Sep passed)
-            group3_sales = [item for item in capital_gains_data
+            group3_sales = [item for item in capital_gains_list
                            if (pd.to_datetime(item['Sale Date']).month == 9 and pd.to_datetime(item['Sale Date']).day > 15) or
                               (pd.to_datetime(item['Sale Date']).month == 10) or
                               (pd.to_datetime(item['Sale Date']).month == 11) or
@@ -2551,7 +2633,7 @@ class ScheduleFAApp:
                 })
 
             # Group 4: Sales from Dec 16 to Mar 15 - Only Mar 15 deadline applies
-            group4_sales = [item for item in capital_gains_data
+            group4_sales = [item for item in capital_gains_list
                            if (pd.to_datetime(item['Sale Date']).month == 12 and pd.to_datetime(item['Sale Date']).day > 15) or
                               (pd.to_datetime(item['Sale Date']).month in [1, 2]) or
                               (pd.to_datetime(item['Sale Date']).month == 3 and pd.to_datetime(item['Sale Date']).day <= 15)]
@@ -2584,7 +2666,7 @@ class ScheduleFAApp:
                 })
 
             # Group 5: Sales from Mar 16 to Mar 31 - Pay by Mar 31 (self-assessment tax)
-            group5_sales = [item for item in capital_gains_data
+            group5_sales = [item for item in capital_gains_list
                            if pd.to_datetime(item['Sale Date']).month == 3 and pd.to_datetime(item['Sale Date']).day > 15]
             if group5_sales:
                 group5_tax = sum(item['Tax Amount (INR)'] for item in group5_sales)
@@ -2628,12 +2710,14 @@ class ScheduleFAApp:
                     'Note': 'Sum across all groups'
                 })
 
-            df_advance_tax = pd.DataFrame(advance_tax_rows)
-        else:
-            df_advance_tax = pd.DataFrame(columns=[
-                'Sale Period', 'Financial Year', 'Tax Type', 'Total Tax (INR)', 'By Jul 15',
-                'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
-            ])
+            return pd.DataFrame(advance_tax_rows)
+
+        # Generate advance tax schedules for BOTH regimes
+        df_advance_tax_new = calculate_advance_tax_schedule(capital_gains_new_regime)
+        df_advance_tax_old = calculate_advance_tax_schedule(capital_gains_old_regime)
+
+        # For backward compatibility
+        df_advance_tax = df_advance_tax_new
 
         # If no sales, create empty DataFrames with columns
         if df_sale_details.empty:
@@ -2688,13 +2772,39 @@ class ScheduleFAApp:
             df_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
             df_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
 
-            # Write Capital Gains sheet BEFORE OS and FSI (per user request)
-            # Table 1: Sale Details (starts at row 1)
-            df_sale_details.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=0)
+            # Write Capital Gains sheet with BOTH regimes for comparison
+            # Start with a dummy DataFrame to create the sheet, then we'll write regime headers manually
+            current_row = 0
 
-            # Table 2: Advance Tax Summary (starts after Table 1 + 3 blank rows)
-            start_row_table2 = len(df_sale_details) + 4  # +1 for header, +3 for spacing
-            df_advance_tax.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=start_row_table2)
+            # Write first table to create the sheet
+            df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=1, startcol=0)
+
+            # Now access the worksheet and add regime header
+            worksheet = writer.sheets["Capital Gains"]
+            worksheet.cell(row=1, column=1, value="NEW TAX REGIME - Capital Gains")
+
+            # Update current_row to continue after sale details
+            current_row = 1 + len(df_sale_details_new) + 1  # header + data + spacing
+            current_row += 3  # +3 blank rows spacing
+
+            # Table 2: New Regime Advance Tax
+            df_advance_tax_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+            current_row += len(df_advance_tax_new) + 6  # +1 header, +5 spacing between regimes
+
+            # OLD TAX REGIME Section
+            # Add header row (directly at current_row+1, no extra blank row)
+            worksheet.cell(row=current_row+1, column=1, value="OLD TAX REGIME - Capital Gains")
+            current_row += 1  # Just move past the header (no blank row)
+
+            # Table 3: Old Regime Sale Details
+            df_sale_details_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+            current_row += len(df_sale_details_old) + 4  # +1 header, +3 spacing
+
+            # Table 4: Old Regime Advance Tax
+            df_advance_tax_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+
+            # For backward compatibility with formatting code
+            start_row_table2 = len(df_sale_details_new) + 4
 
             # Insert Schedule OS and FSI after Capital Gains
             df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
@@ -2736,26 +2846,152 @@ class ScheduleFAApp:
             for sheet_name in writer.sheets:
                 ws = writer.sheets[sheet_name]
 
-                # Format header row
-                for cell in ws[1]:
-                    cell.fill = header_fill
-                    cell.font = header_font
-                    cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                    cell.border = border_thin
+                # Special formatting for Capital Gains sheet with dual regimes
+                if sheet_name == "Capital Gains":
+                    # Colors for Capital Gains dual-regime layout
+                    regime_header_fill = PatternFill(start_color="0277BD", end_color="0277BD", fill_type="solid")  # Blue (regime headers)
+                    regime_header_font = Font(bold=True, color="FFFFFF", size=12)
+                    advance_tax_header_fill = PatternFill(start_color="455A64", end_color="455A64", fill_type="solid")  # Dark gray (advance tax headers)
+                    advance_tax_header_font = Font(bold=True, color="FFFFFF", size=11)
+                    no_border = Border()  # Empty border (no lines)
 
-                # Format data rows
-                for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
-                    # Alternating row colors (skip for Capital Gains table 2)
-                    if sheet_name != "Capital Gains" or row_idx <= len(df_sale_details) + 1:
+                    # Row 1: NEW TAX REGIME header (blue, centered, NO borders)
+                    for cell in ws[1]:
+                        cell.fill = regime_header_fill
+                        cell.font = regime_header_font
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                        cell.border = no_border
+
+                    # Row 2: Sale details header (teal)
+                    for cell in ws[2]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                        cell.border = border_thin
+
+                    # Calculate row numbers (they shifted after removing blank rows)
+                    # Old: row 11, New: row 2 + len(sale_details) + 1 = approximately row 10
+                    advance_tax_row_new = 2 + len(df_sale_details_new) + 1 + 3  # +3 for spacing
+                    regime2_header_row = advance_tax_row_new + len(df_advance_tax_new) + 1 + 5  # +5 for spacing
+                    sale_details_row_old = regime2_header_row + 1
+                    advance_tax_row_old = sale_details_row_old + len(df_sale_details_old) + 1 + 3
+
+                    # Advance tax header NEW - dark gray ONLY for columns with content (A-I), J-N no color/border
+                    for cell in ws[advance_tax_row_new]:
+                        if cell.value is not None and str(cell.value).strip() != '':
+                            cell.fill = advance_tax_header_fill
+                            cell.font = advance_tax_header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            cell.border = border_thin
+                        else:
+                            # Empty columns - no color, no border
+                            cell.border = no_border
+
+                    # OLD TAX REGIME header (blue, centered, NO borders)
+                    for cell in ws[regime2_header_row]:
+                        cell.fill = regime_header_fill
+                        cell.font = regime_header_font
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                        cell.border = no_border
+
+                    # Sale details header OLD (teal)
+                    for cell in ws[sale_details_row_old]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                        cell.border = border_thin
+
+                    # Advance tax header OLD - dark gray ONLY for columns with content (A-I), J-N no color/border
+                    for cell in ws[advance_tax_row_old]:
+                        if cell.value is not None and str(cell.value).strip() != '':
+                            cell.fill = advance_tax_header_fill
+                            cell.font = advance_tax_header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            cell.border = border_thin
+                        else:
+                            # Empty columns - no color, no border
+                            cell.border = no_border
+
+                    # Format all data rows
+                    header_rows = {1, 2, advance_tax_row_new, regime2_header_row, sale_details_row_old, advance_tax_row_old}
+
+                    # Calculate row ranges for different sections
+                    sale_details_rows_new = set(range(3, 2 + len(df_sale_details_new) + 1))  # Rows after header 2
+                    advance_tax_data_rows_new = set(range(advance_tax_row_new + 1, advance_tax_row_new + len(df_advance_tax_new) + 1))
+                    sale_details_rows_old = set(range(sale_details_row_old + 1, sale_details_row_old + len(df_sale_details_old) + 1))
+                    advance_tax_data_rows_old = set(range(advance_tax_row_old + 1, advance_tax_row_old + len(df_advance_tax_old) + 1))
+
+                    all_advance_tax_data_rows = advance_tax_data_rows_new | advance_tax_data_rows_old
+                    all_sale_details_rows = sale_details_rows_new | sale_details_rows_old
+
+                    # Professional color scheme for sale details
+                    light_blue_fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")  # Very light blue
+                    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # White
+
+                    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                        is_blank_row = all(cell.value is None or str(cell.value).strip() == '' for cell in row)
+
+                        # Skip formatting for headers (already done above)
+                        if row_idx in header_rows:
+                            continue
+
+                        # Determine if this is an odd or even sale details row (for alternating colors)
+                        if row_idx in sale_details_rows_new:
+                            row_position = row_idx - 3  # Position within sale details (0-indexed)
+                        elif row_idx in sale_details_rows_old:
+                            row_position = row_idx - (sale_details_row_old + 1)
+                        else:
+                            row_position = None
+
+                        # Apply borders and center alignment
+                        for cell in row:
+                            if is_blank_row:
+                                # Blank separator rows - no borders
+                                cell.alignment = Alignment(horizontal='center', vertical='center')
+                            elif row_idx in all_advance_tax_data_rows:
+                                # Advance tax data rows - border only for cells with content
+                                if cell.value is not None and str(cell.value).strip() != '':
+                                    cell.border = border_thin
+                                else:
+                                    cell.border = no_border
+                                cell.alignment = Alignment(horizontal='center', vertical='center')
+                            elif row_idx in all_sale_details_rows:
+                                # Sale details rows - alternating colors (light blue / white)
+                                if row_position is not None and row_position % 2 == 0:
+                                    cell.fill = white_fill
+                                else:
+                                    cell.fill = light_blue_fill
+                                cell.border = border_thin
+                                cell.alignment = Alignment(horizontal='center', vertical='center')
+                            else:
+                                # Other regular data rows
+                                cell.border = border_thin
+                                cell.alignment = Alignment(horizontal='center', vertical='center')
+                else:
+                    # Standard formatting for other sheets
+                    # Format header row
+                    for cell in ws[1]:
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                        cell.border = border_thin
+
+                    # Format data rows
+                    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                        # Check if this is a blank separator row (all cells are None or empty)
+                        is_blank_row = all(cell.value is None or str(cell.value).strip() == '' for cell in row)
+
+                        # Alternating row colors
                         if row_idx % 2 == 0:
                             for cell in row:
                                 if cell.value is not None:
                                     cell.fill = alt_row_fill
 
-                    # Apply borders and alignment
-                    for cell in row:
-                        cell.border = border_thin
-                        cell.alignment = Alignment(vertical='center')
+                        # Apply borders and alignment (skip borders for blank separator rows)
+                        for cell in row:
+                            if not is_blank_row:
+                                cell.border = border_thin
+                            cell.alignment = Alignment(vertical='center')
 
                 # Format specific columns based on content
                 for col_idx, col in enumerate(ws.iter_cols(min_row=1, max_row=1), start=1):
@@ -3145,10 +3381,37 @@ if __name__ == "__main__":
     if not os.path.exists(TRANSACTION_HISTORY_FILE):
         TRANSACTION_HISTORY_FILE = "Transaction_History.csv"
 
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Schedule FA Generator')
+    parser.add_argument('--income-bracket', type=str, help='Income bracket choice (1-11)')
+    args = parser.parse_args()
+
     print("\n[*] Starting Schedule FA generation (WEB SCRAPING MODE)...")
     print(f"[*] This will open Chrome browser in background")
     print(f"[*] Looking for E*TRADE files: {BYSTATUS_FILE}, {GL_FILE}")
     print()
+
+    # Get income bracket from command-line argument
+    income_bracket = args.income_bracket.strip() if args.income_bracket else None
+
+    # If empty, no G&L file exists, use defaults (won't be used anyway)
+    if not income_bracket:
+        print("[i] No capital gains - using default STCG rates (will not be applied)")
+        stcg_rate_new = 0.312
+        stcg_rate_old = 0.312
+        print(f"[OK] Default rates set (not used - no sales)")
+        print()
+    else:
+        # Calculate rates for BOTH regimes based on income bracket
+        stcg_rate_new, stcg_rate_old, new_display, old_display = calculate_stcg_rates_for_income(income_bracket)
+        print(f"[OK] New Tax Regime STCG: {new_display}")
+        print(f"[OK] Old Tax Regime STCG: {old_display}")
+        print(f"[i] Capital Gains sheet will show BOTH regimes for comparison")
+        print()
+
+    # For backward compatibility, use new regime rate as default
+    # (This variable is used when initializing the app - represents New Regime for now)
+    stcg_rate = stcg_rate_new
 
     try:
         # Read E*TRADE files to discover company symbols
@@ -3197,7 +3460,7 @@ if __name__ == "__main__":
         print(f"[OK] Discovered {len(symbols)} unique symbols: {', '.join(sorted(str(s).strip() for s in symbols))}")
 
         # Initialize app to access scraping methods
-        app = ScheduleFAApp(calendar_year=TARGET_YEAR)
+        app = ScheduleFAApp(calendar_year=TARGET_YEAR, stcg_rate_new=stcg_rate_new, stcg_rate_old=stcg_rate_old)
 
         # Scrape company info for each discovered symbol not in config
         config_companies = config.get("table_a3_companies", {})
