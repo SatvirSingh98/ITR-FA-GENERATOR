@@ -362,10 +362,12 @@ AMD    | 2025-12-15 | 120.00       | 85.50 | 10,260
 - Handles partial sales and multiple dividend payments
 - Same dividend total appears in both A2 and A3 (correct!)
 
-❌ **Out of scope:**
-- Schedule OS (income tax calculation)
-- Rule 115(1)(e) month-end rate (that's for Schedule OS)
-- Quarterly breakup for advance tax
-- Form 67 foreign tax credit
+✅ **Also supported:**
+- **Schedule OS** (Other Sources income) - dividend income with Rule 115(1)(e) exchange rates
+- **Schedule FSI** (Foreign Source Income) - aggregate dividend + capital gains reporting
+- Quarterly breakup for advance tax (Section 234C periods)
 
-This tool handles **Schedule FA disclosure only** - consult ITRFA.in or your CA for Schedule OS/FSI/Form 67.
+See [schedule_os_fsi.md](schedule_os_fsi.md) for complete Schedule OS/FSI documentation.
+
+❌ **Out of scope:**
+- Form 67 foreign tax credit (consult your CA)
