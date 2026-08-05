@@ -215,7 +215,6 @@ The peak value calculation window depends on when the lot was acquired and wheth
 - **Example:** Acquired May 9, 2025, Sold Sep 20, 2025 → Peak from **May 9, 2025 to Sep 20, 2025**
 - **Why:** Peak is only for the period shares were actually held
 
-### Implementation (Code Lines 1015-1016)
 
 ```python
 hold_start = max(self.start_date, acq_date_str)  # Later of: Jan 1 OR acquisition
@@ -236,7 +235,6 @@ The **A3 Peak Value Details** sheet shows the exact peak calculation window and 
 ### ITRFA.in Answer:
 "**FIFO — we use ETRADE's own Gains & Losses export as the source of which lot was sold.** That report already reflects whichever lot-relief method ETRADE itself applied when the sale executed. **We don't re-derive or override the lot order on top of it.**"
 
-**Implementation:**
 - Use E*TRADE's G&L_Expanded.xlsx acquisition dates AS-IS
 - Don't re-calculate FIFO ourselves
 - E*TRADE has already applied the correct lot-relief method
@@ -267,18 +265,13 @@ Dividend allocation:
 This is CORRECT! Dividend stays with the lot that held shares on payment date.
 ```
 
-**Implementation:** Our code already handles this correctly (lines 1436-1500).
 
 ---
 
 ## Code Location
-**File:** `itr_fa_etrade.py`  
 **Lines:** 1244-1400 (separate row creation for open/sold/future-sold lots)
 
 **Key Sections:**
-- Lines 1252-1294: Parse open lots (shares still holding) → ONE row per lot
-- Lines 1296-1349: Parse sold lots (sold in calendar year) → ONE row per lot with "Sold" suffix
-- Lines 1351-1400: Parse future-sold lots (sold after FY) → ONE row per lot with "- Sold" suffix
 
 ---
 

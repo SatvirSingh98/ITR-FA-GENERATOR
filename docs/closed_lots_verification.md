@@ -111,18 +111,7 @@ Sellable Sheet:
 | Requirement | Status | Code Reference |
 |------------|--------|----------------|
 | Net share settlement (ignore withholding) | ✅ CORRECT | Tool doesn't process Unvested withholding |
-| Sell-to-cover (include from G&L) | ✅ CORRECT | Lines 1286-1348 |
-| Include sold lots in Table A3 | ✅ CORRECT | Lines 1286-1348 |
-| Closing value = 0 for sold lots | ✅ CORRECT | Lines 1060-1062 |
-| Report proceeds with exact date TTBR | ✅ CORRECT | Lines 1316-1323, 1347 |
-| Initial value = vest date FMV × TTBR | ✅ CORRECT | Lines 1305-1318 |
 | Peak value during holding period | ✅ CORRECT | Line 1055 |
-| Calendar year filter (Jan 1 - Dec 31) | ✅ CORRECT | Lines 1188-1193 |
-| Separate Capital Gains sheet | ✅ CORRECT | Lines 1939-2083 |
-| Capital Gains uses Rule 115(1)(f) | ✅ CORRECT | Lines 2010-2036 |
-| ESPP cost basis per Section 49(2AA) | ✅ CORRECT | Lines 1309-1314, 1986-1992 |
-| 24-month holding threshold | ✅ CORRECT | Lines 1971-1978 |
-| Advance tax schedule (Rule 234C) | ✅ CORRECT | Lines 2040-2061 |
 
 **Result:** Tool is 100% compliant with ITRFA.in guidance for both withholding methods.
 
@@ -132,18 +121,8 @@ Sellable Sheet:
 
 | Requirement | Status | Code Reference |
 |------------|--------|----------------|
-| Include sold lots in Table A3 | ✅ CORRECT | Lines 1286-1348 |
-| Closing value = 0 for sold lots | ✅ CORRECT | Lines 1060-1062 |
-| Report proceeds with exact date TTBR | ✅ CORRECT | Lines 1316-1323, 1347 |
-| Initial value = vest date FMV × TTBR | ✅ CORRECT | Lines 1305-1318 |
 | Peak value during holding period | ✅ CORRECT | Line 1055 |
-| Calendar year filter (Jan 1 - Dec 31) | ✅ CORRECT | Lines 1188-1193 |
 | Sell-to-cover shares included | ✅ CORRECT | No exclusions |
-| Separate Capital Gains sheet | ✅ CORRECT | Lines 1939-2083 |
-| Capital Gains uses Rule 115(1)(f) | ✅ CORRECT | Lines 2010-2036 |
-| ESPP cost basis per Section 49(2AA) | ✅ CORRECT | Lines 1309-1314, 1986-1992 |
-| 24-month holding threshold | ✅ CORRECT | Lines 1971-1978 |
-| Advance tax schedule (Rule 234C) | ✅ CORRECT | Lines 2040-2061 |
 
 **Result:** Tool is 100% compliant with ITRFA.in guidance.
 
@@ -156,7 +135,6 @@ Sellable Sheet:
 **ITRFA.in Requirement:**
 > "Schedule FA discloses every foreign asset held at any time between January 1 and December 31 — not just what you hold on Dec 31. Shares you sold during the year (including sell-to-cover) still belong in Table A3, with a zero closing value plus their sale proceeds."
 
-**Implementation (Lines 1286-1348):**
 ```python
 # 2. Parse Sold Lots (Actually sold WITHIN this FY)
 # These have: Closing Balance = 0 (no longer holding)
@@ -183,7 +161,6 @@ for _, row in df_sold.iterrows():
 **ITRFA.in Requirement:**
 > "Example — RSU lot sold mid-year: Closing value (Dec 31) = 0 (sold)"
 
-**Implementation (Lines 1060-1062):**
 ```python
 # 3. Closing Value
 # If sold within this FY: Closing = 0 (no longer holding)
@@ -210,7 +187,6 @@ else:
 **ITRFA.in Requirement:**
 > "Proceeds = gross proceeds × SBI TTBR on 20 Aug 2025 (CBDT's Schedule FA filing instructions)"
 
-**Implementation (Lines 1316-1323, 1347):**
 ```python
 proceeds_usd = float(row['Total Proceeds'])
 
@@ -240,7 +216,6 @@ proceeds_inr = round(proceeds_usd * sell_ttbr, 2)
 **ITRFA.in Requirement:**
 > "Initial value = cost basis × SBI TTBR on 15 Jun 2025 (CBDT's Schedule FA filing instructions)"
 
-**Implementation (Lines 1305-1318, 1020-1051):**
 ```python
 # CRITICAL: Use correct FMV per Section 49(2AA) of Income Tax Act
 # - RSU: "Adjusted Cost Basis Per Share" is correct (equals FMV at vest)
@@ -280,7 +255,6 @@ initial_val = round(qty * unit_cost_usd * ttbr_init, 2)
 **ITRFA.in Requirement:**
 > "Peak value = lot's share of peak portfolio value during the year"
 
-**Implementation (Lines 1010-1013, 1055):**
 ```python
 # Define holding window
 hold_start = max(self.start_date, acq_date_str)
@@ -304,7 +278,6 @@ peak_val = round(qty * window['Valuation_Per_Share_INR'].max(), 2)
 **ITRFA.in Requirement:**
 > "Schedule FA follows the calendar year; a lot sold in November has a Dec 31 closing value of 0."
 
-**Implementation (Lines 1188-1193):**
 ```python
 # CRITICAL DISTINCTION:
 # - Table A3 (Schedule FA) uses CALENDAR YEAR (Jan 1 - Dec 31)
@@ -334,14 +307,12 @@ df_sold_calendar = df_sold_all[
 **ITRFA.in Requirement:**
 > "Even though you did not place the order, those shares were briefly held and then sold — so they are reported in Table A3 with a zero closing value and their proceeds."
 
-**Implementation:**
 - ✅ **No special exclusion logic** for sell-to-cover
 - ✅ G&L_Expanded.xlsx contains ALL sales (E*TRADE includes sell-to-cover in "Previously Held Shares")
 - ✅ Tool processes sell-to-cover like any other sale
 - ✅ Result: Closing value = 0, Proceeds = actual amount
 
 **Code Evidence:**
-- Lines 1286-1348: Generic sold lot processing (no "if sell-to-cover" checks)
 - All sales from G&L are treated equally
 
 **ITRFA.in Clarification Addressed:**
@@ -360,7 +331,6 @@ Tool correctly handles this because:
 **ITRFA.in Requirement:**
 > "The automatic sale that follows is a separate capital gain or loss — computed and reported in Schedule CG, not Schedule FA."
 
-**Implementation (Lines 1939-2083):**
 ```python
 # Create Capital Gains sheet using EXTENDED PERIOD (Jan 1 - Mar 31 next year)
 # Build Capital Gains from df_sold_cg (extended period) instead of equity_tranches
@@ -379,7 +349,6 @@ if 'df_sold_cg' in locals() and not df_sold_cg.empty:
         })
 ```
 
-**Where `df_sold_cg` is defined (Lines 1211-1215):**
 ```python
 # === FOR CAPITAL GAINS SHEET (Extended: Jan 1 - Mar 31 next year) ===
 df_sold_cg = df_sold_all[
@@ -432,7 +401,6 @@ asset is transferred (sold)"**
 - **All three are different dates with different rates!**
 ```
 
-**Implementation (Lines 1996-2036):**
 ```python
 # CRITICAL: Income-tax Rule 115(1)(f) for Schedule CG (Capital Gains)
 # "For income chargeable under the head 'Capital gains', the specified date is
@@ -491,7 +459,6 @@ The tool is **CORRECT** - it uses Rule 115(1)(f) for Capital Gains sheet.
 **ITRFA.in Requirement (Sell-to-Cover article):**
 > "Cost basis = the same FMV used for perquisite tax on the vest date"
 
-**Implementation (Lines 1309-1314, 1986-1992):**
 ```python
 # For Table A3 (lines 1309-1314):
 # CRITICAL: Use correct FMV per Section 49(2AA) of Income Tax Act
@@ -526,7 +493,6 @@ else:
 **ITRFA.in Requirement (Sell-to-Cover article):**
 > "Shares of a foreign company are treated as unlisted securities for Indian capital gains purposes. The long-term threshold for unlisted securities is 24 months, not the 12-month rule."
 
-**Implementation (Lines 1971-1978):**
 ```python
 # Determine tax type, rate, and section
 # Foreign company shares = UNLISTED securities (no STT on Indian exchange)
@@ -557,7 +523,6 @@ else:
 **ITRFA.in Requirement (Sell-to-Cover article):**
 Not explicitly mentioned, but tool implements this correctly.
 
-**Implementation (Lines 2040-2061):**
 ```python
 # Calculate advance tax schedule based on sale date (always round UP)
 sale_month = sale_date.month
@@ -684,9 +649,6 @@ Advance Tax: By next Jul/Sep/Dec/Mar (depends on sale month)
 - [docs/table_a2_peak_calculation.md](table_a2_peak_calculation.md) - Peak value
 
 **README.md sections:**
-- Lines 56-86: Dividend support (Schedule FA + OS + FSI)
-- Lines 169-212: Capital Gains & Advance Tax
-- Lines 267-280: Credits & Acknowledgments (ITRFA.in)
 
 ---
 

@@ -235,9 +235,7 @@ The tool calculates peak value using this algorithm:
 
 ## Code Reference
 
-**File:** `itr_fa_etrade.py`
 
-**Peak Calculation:** Lines 1059-1086
 ```python
 # Calculate peak value and details
 peak_idx = window['Valuation_Per_Share_INR'].idxmax()
@@ -250,7 +248,6 @@ peak_ttbr = peak_row['TTBR']
 peak_per_share_inr = peak_row['Valuation_Per_Share_INR']
 ```
 
-**Sheet Generation:** Lines 1821-1839
 ```python
 # Create Peak Value Details sheet
 peak_details_data = []

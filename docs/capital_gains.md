@@ -87,7 +87,6 @@ Rows P+2-Q: Advance tax schedule
 
 **Common mistake:** Using exact sale/acquisition dates (WRONG!)
 
-**Implementation:** Lines 1552-1602 in `itr_fa_etrade.py`
 
 ---
 
@@ -217,7 +216,6 @@ This allows users to compare and decide which regime minimizes their tax liabili
 
 **Calculation:** Always rounded UP using `math.ceil()`
 
-**Implementation:** 
 - Rate calculation: `calculate_stcg_rates_for_income()` function (lines 49-98)
 - Dual-regime tax computation: `calculate_tax_for_regime()` function (lines 2445-2491)
 
@@ -254,7 +252,6 @@ Use: $152.39 per share
 
 **Prerequisite:** Employer must have taxed the discount as perquisite (normal case for qualified ESPP)
 
-**Implementation:** Lines 1545-1551 in `itr_fa_etrade.py`
 
 ---
 
@@ -314,7 +311,6 @@ Capital gain: $0.85 (minimal gain - reflects reality)
 - Use E*TRADE's lot assignment as-is
 - No FIFO enforcement or re-derivation
 
-**Implementation:** Lines 1440-1460 in `itr_fa_etrade.py`
 
 ### Step 3: Get Rule 115(1)(f) Exchange Rate
 
@@ -334,7 +330,6 @@ Sale Proceeds: $1,322.50 × 83.50 = ₹1,10,429
 Cost Basis: $1,321.65 × 83.50 = ₹1,10,358
 ```
 
-**Implementation:** Lines 1552-1602 in `itr_fa_etrade.py`
 
 ### Step 4: Calculate Capital Gain
 
@@ -402,9 +397,6 @@ Old Regime Tax: ceil(₹71 × 31.2%) = ceil(₹22.152) = ₹23
 Savings with New Regime: ₹8
 ```
 
-**Implementation:** 
-- Tax calculation: Lines 2471-2491 in `itr_fa_etrade.py`
-- Excel dual-table output: Lines 2775-2806 in `itr_fa_etrade.py`
 
 ---
 
@@ -487,7 +479,6 @@ Both New and Old regime calculations include separate advance tax schedules:
 | **New** | ₹93,769 | ₹14,067 | ₹42,198 | ₹70,328 | ₹93,769 |
 | **Old** | ₹1,40,654 | ₹21,098 | ₹63,294 | ₹1,05,491 | ₹1,40,654 |
 
-**Implementation:** Lines 2538-2717 in `itr_fa_etrade.py`
 
 ---
 
