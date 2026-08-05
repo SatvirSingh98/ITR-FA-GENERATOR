@@ -1135,15 +1135,16 @@ class ScheduleFAApp:
             self.df_sbi = self._fetch_sbi_rates_web(extra_dates=unique_extra)
             self._extra_ttbr_dates_loaded = True
 
-    def process_etrade_exports(self, bystatus_path=None, gl_path=None, transaction_history_path=None, account_no="146239025", config=None):
+    def process_etrade_exports(self, bystatus_path=None, gl_path=None, transaction_history_path=None, account_no=None, config=None):
         # Default paths - check inputs folder first, then root folder
+        # ALL FILES ARE NOW OPTIONAL - handle partial file scenarios
         if bystatus_path is None:
             if os.path.exists("etrade_inputs/ByStatus_expanded.xlsx"):
                 bystatus_path = "etrade_inputs/ByStatus_expanded.xlsx"
             elif os.path.exists("ByStatus_expanded.xlsx"):
                 bystatus_path = "ByStatus_expanded.xlsx"
             else:
-                raise FileNotFoundError("ByStatus_expanded.xlsx not found in 'etrade_inputs/' or root folder.")
+                bystatus_path = None  # ByStatus not found - Table A3 will be empty (no holdings)
 
         # G&L file is OPTIONAL - only needed if stocks were sold during the financial year
         if gl_path is None:
@@ -1152,7 +1153,7 @@ class ScheduleFAApp:
             elif os.path.exists("G&L_Expanded.xlsx"):
                 gl_path = "G&L_Expanded.xlsx"
             else:
-                gl_path = None  # G&L file not found - this is OK
+                gl_path = None  # G&L file not found - Table A3 incomplete, Capital Gains empty
 
         # Transaction History CSV is OPTIONAL - only needed if dividends were received
         if transaction_history_path is None:
@@ -1163,8 +1164,8 @@ class ScheduleFAApp:
             else:
                 transaction_history_path = None  # Transaction History not found - this is OK
 
-        if not os.path.exists(bystatus_path):
-            raise FileNotFoundError(f"ByStatus file missing: '{bystatus_path}' not found.")
+        # Note: We allow processing even without ByStatus/G&L if companies exist in config
+        # This enables ClientStatement-only mode for Table A2 generation
 
         # IMPORTANT: Scan files for pre-FY acquisition dates and reload TTBR if needed
         # This ensures we have TTBR for dates like Nov 2024 for initial value calculations
@@ -1187,12 +1188,19 @@ class ScheduleFAApp:
                 })
                 print(f"    {div_row['Symbol']}: {div_row['Date']} - ${div_row['Amount (USD)']} = INR {div_row['Amount (INR)']:,.2f}")
 
-        try:
-            df_bystatus = pd.read_excel(bystatus_path, sheet_name='Sellable')
-        except Exception as e:
-            raise ValueError(f"Error reading ByStatus file. Check if 'Sellable' sheet exists: {e}")
-
-        df_open = df_bystatus[df_bystatus['Record Type'].isin(['Purchase', 'Grant'])].copy()
+        # Read ByStatus file if available
+        df_open = pd.DataFrame()
+        if bystatus_path:
+            try:
+                df_bystatus = pd.read_excel(bystatus_path, sheet_name='Sellable')
+                df_open = df_bystatus[df_bystatus['Record Type'].isin(['Purchase', 'Grant'])].copy()
+            except Exception as e:
+                print(f"[!] WARNING: Error reading ByStatus file: {e}")
+                print(f"[!] Table A3 holdings will be empty")
+                df_open = pd.DataFrame()
+        else:
+            print(f"[!] WARNING: ByStatus_expanded.xlsx not found")
+            print(f"[!] Table A3 will not include current holdings (only sales from G&L if available)")
 
         # Try to read G&L file if it exists
         df_sold = pd.DataFrame()  # Empty dataframe if no sales
@@ -1646,83 +1654,94 @@ class ScheduleFAApp:
             cleaned_name = self.clean_text_for_itr(comp_info["name"])
             company_name_to_symbol[cleaned_name] = symbol
 
-        # Get the daily matrix (dates and TTBR) from first company
-        first_symbol = symbols_in_portfolio[0]
-        first_company = self.get_company_details(first_symbol)
-        df_daily = first_company["matrix"][['Date', 'TTBR']].copy()
+        # Get the daily matrix (dates and TTBR) - skip if no holdings/sales
+        if not symbols_in_portfolio:
+            # No ByStatus or G&L - create empty daily matrix with just TTBR data
+            df_daily = self.df_sbi[['Date', 'TTBR']].copy()
+            df_daily['Total Account Value (USD)'] = 0
+            df_daily['Total Account Value (INR)'] = 0
+            total_peak_account_inr = 0
+            total_peak_account_usd = 0
+            peak_date = self.end_date
+            peak_ttbr = 0
+            print(f"[i] No holdings/sales data - A2 Peak will be 0")
+        else:
+            first_symbol = symbols_in_portfolio[0]
+            first_company = self.get_company_details(first_symbol)
+            df_daily = first_company["matrix"][['Date', 'TTBR']].copy()
 
-        # For each day, calculate total account value across ALL companies
-        daily_account_usd = []
-        daily_account_inr = []
+            # For each day, calculate total account value across ALL companies
+            daily_account_usd = []
+            daily_account_inr = []
 
-        import re
-        for _, day_row in df_daily.iterrows():
-            date = day_row['Date']
-            ttbr = day_row['TTBR']
+            import re
+            for _, day_row in df_daily.iterrows():
+                date = day_row['Date']
+                ttbr = day_row['TTBR']
 
-            # Sum value across all companies
-            total_value_usd = 0
+                # Sum value across all companies
+                total_value_usd = 0
 
-            for symbol in symbols_in_portfolio:
-                comp_info = self.get_company_details(symbol)
-                df_matrix = comp_info["matrix"]
+                for symbol in symbols_in_portfolio:
+                    comp_info = self.get_company_details(symbol)
+                    df_matrix = comp_info["matrix"]
 
-                # Get stock price for this date
-                price_row = df_matrix[df_matrix['Date'] == date]
-                if price_row.empty:
-                    continue  # Skip if no price data for this date
-                stock_price = price_row['Stock_Close_USD'].values[0]
+                    # Get stock price for this date
+                    price_row = df_matrix[df_matrix['Date'] == date]
+                    if price_row.empty:
+                        continue  # Skip if no price data for this date
+                    stock_price = price_row['Stock_Close_USD'].values[0]
 
-                # Sum shares of this company owned on this date
-                company_shares = 0
-                for tranche in equity_tranches:
-                    # Skip Beneficial Interest (unvested - not part of custodial account balance)
-                    if "Beneficial Interest" in tranche['NatureOfEntity']:
-                        continue
+                    # Sum shares of this company owned on this date
+                    company_shares = 0
+                    for tranche in equity_tranches:
+                        # Skip Beneficial Interest (unvested - not part of custodial account balance)
+                        if "Beneficial Interest" in tranche['NatureOfEntity']:
+                            continue
 
-                    # Match tranche to company
-                    tranche_company_name = tranche['NameOfEntity']
-                    if company_name_to_symbol.get(tranche_company_name) != symbol:
-                        continue  # This tranche belongs to a different company
+                        # Match tranche to company
+                        tranche_company_name = tranche['NameOfEntity']
+                        if company_name_to_symbol.get(tranche_company_name) != symbol:
+                            continue  # This tranche belongs to a different company
 
-                    acq_date = tranche['InterestAcquiringDate']
-                    sell_date = tranche.get('_SaleDate')  # None if not sold
+                        acq_date = tranche['InterestAcquiringDate']
+                        sell_date = tranche.get('_SaleDate')  # None if not sold
 
-                    # Determine if we owned this holding on this date
-                    # Must be: acquired by this date AND not yet sold (or sold after this date)
-                    if acq_date <= date and (sell_date is None or sell_date > date):
-                        # Extract quantity from nature string
-                        nature = tranche['NatureOfEntity']
-                        qty_match = re.search(r'\((\d+)\s+shares?\)', nature)
-                        if qty_match:
-                            qty = int(qty_match.group(1))
-                            company_shares += qty
+                        # Determine if we owned this holding on this date
+                        # Must be: acquired by this date AND not yet sold (or sold after this date)
+                        if acq_date <= date and (sell_date is None or sell_date > date):
+                            # Extract quantity from nature string
+                            nature = tranche['NatureOfEntity']
+                            qty_match = re.search(r'\((\d+)\s+shares?\)', nature)
+                            if qty_match:
+                                qty = int(qty_match.group(1))
+                                company_shares += qty
 
-                # Add this company's value to total
-                total_value_usd += company_shares * stock_price
+                    # Add this company's value to total
+                    total_value_usd += company_shares * stock_price
 
-            # Calculate total account value in INR
-            total_value_inr = total_value_usd * ttbr
+                # Calculate total account value in INR
+                total_value_inr = total_value_usd * ttbr
 
-            daily_account_usd.append(total_value_usd)
-            daily_account_inr.append(total_value_inr)
+                daily_account_usd.append(total_value_usd)
+                daily_account_inr.append(total_value_inr)
 
-        # Add to dataframe for reference
-        df_daily['Total Account Value (USD)'] = daily_account_usd
-        df_daily['Total Account Value (INR)'] = daily_account_inr
+            # Add to dataframe for reference
+            df_daily['Total Account Value (USD)'] = daily_account_usd
+            df_daily['Total Account Value (INR)'] = daily_account_inr
 
-        # Find peak account value
-        peak_idx = df_daily['Total Account Value (INR)'].idxmax()
-        peak_row = df_daily.loc[peak_idx]
+            # Find peak account value
+            peak_idx = df_daily['Total Account Value (INR)'].idxmax()
+            peak_row = df_daily.loc[peak_idx]
 
-        total_peak_account_inr = round(peak_row['Total Account Value (INR)'], 2)
-        total_peak_account_usd = round(peak_row['Total Account Value (USD)'], 2)
-        peak_date = peak_row['Date']
-        peak_ttbr = round(peak_row['TTBR'], 2)
+            total_peak_account_inr = round(peak_row['Total Account Value (INR)'], 2)
+            total_peak_account_usd = round(peak_row['Total Account Value (USD)'], 2)
+            peak_date = peak_row['Date']
+            peak_ttbr = round(peak_row['TTBR'], 2)
 
-        print(f"[*] A2 Peak calculated from daily account values:")
-        print(f"    Peak Date: {peak_date}")
-        print(f"    Account Value: ${total_peak_account_usd:.2f} x {peak_ttbr:.2f} = {total_peak_account_inr:.2f} INR")
+            print(f"[*] A2 Peak calculated from daily account values:")
+            print(f"    Peak Date: {peak_date}")
+            print(f"    Account Value: ${total_peak_account_usd:.2f} x {peak_ttbr:.2f} = {total_peak_account_inr:.2f} INR")
 
         # Store the daily matrix with account values for the reference sheet
         self._daily_account_matrix = df_daily
@@ -1732,21 +1751,24 @@ class ScheduleFAApp:
 
         if client_statement_closing_usd:
             # Use ClientStatement value and convert to INR
-            # Get TTBR rate for Dec 31 from first company's matrix (TTBR is same for all)
-            first_company = self.get_company_details(symbols_in_portfolio[0])
-            df_matrix = first_company["matrix"]
-            dec31_row = df_matrix[df_matrix['Date'] == self.end_date]
-            closing_ttbr = dec31_row['TTBR'].values[0] if not dec31_row.empty else 89.47
+            # Get TTBR rate for Dec 31
+            if symbols_in_portfolio:
+                # Get from first company's matrix (TTBR is same for all)
+                first_company = self.get_company_details(symbols_in_portfolio[0])
+                df_matrix = first_company["matrix"]
+                dec31_row = df_matrix[df_matrix['Date'] == self.end_date]
+                closing_ttbr = dec31_row['TTBR'].values[0] if not dec31_row.empty else 89.47
+            else:
+                # No holdings/sales - get TTBR from SBI data directly
+                dec31_row = self.df_sbi[self.df_sbi['Date'] == self.end_date]
+                closing_ttbr = dec31_row['TTBR'].values[0] if not dec31_row.empty else 89.47
 
             total_closing_account_inr = round(client_statement_closing_usd * closing_ttbr, 2)
             print(f"[OK] Using ClientStatement closing: ${client_statement_closing_usd:.2f} x {closing_ttbr:.2f} = {total_closing_account_inr:.2f} INR")
         else:
-            # Fallback: sum of A3 closing balances (EXCLUDE Beneficial Interest)
-            total_closing_account_inr = sum(
-                t["ClosingBalance"] for t in equity_tranches
-                if "Beneficial Interest" not in t["NatureOfEntity"]
-            )
-            print(f"[i] Using calculated closing from A3 sum (excluding Beneficial Interest): {total_closing_account_inr:,} INR")
+            # No ClientStatement: mark as missing
+            total_closing_account_inr = 0
+            print(f"[!] ClientStatement PDF not found - Table A2 closing balance will be 0")
 
         # Build Table A2 entry from config (single custodial account)
         acc_config = config.get("custodial_account", {})
@@ -1761,12 +1783,9 @@ class ScheduleFAApp:
         elif from_config:
             final_account_no = from_config
             print(f"[i] Using account number from config.json: {final_account_no}")
-        elif account_no:
-            final_account_no = account_no
-            print(f"[i] Using account number from parameter: {final_account_no}")
         else:
             final_account_no = ""
-            print(f"[i] Account number not found - leaving empty")
+            print(f"[!] Account number not found - Table A2 account number will be empty")
 
         # Calculate total dividends (all symbols combined)
         total_dividends_inr = int(df_dividends['Amount (INR)'].sum()) if not df_dividends.empty else 0
@@ -1992,35 +2011,42 @@ class ScheduleFAApp:
         # Get symbols from company cache (these are the ones we actually fetched data for)
         symbols_in_portfolio = sorted(self.company_cache.keys())
 
-        # Start with Date and TTBR columns from any company's matrix (TTBR is same for all)
-        first_symbol = symbols_in_portfolio[0]
-        first_company = self.get_company_details(first_symbol)
-        df_reference = first_company["matrix"][['Date', 'TTBR']].copy()
-        df_reference = df_reference.rename(columns={'TTBR': 'SBI TTBR'})
-
-        # Add columns for each company (Symbol Price USD, Symbol Value INR)
-        for symbol in symbols_in_portfolio:
-            comp_info = self.get_company_details(symbol)
-            df_company = comp_info["matrix"][['Date', 'Stock_Close_USD', 'Valuation_Per_Share_INR']].copy()
-
-            # Merge with main reference dataframe on Date
-            df_reference = pd.merge(
-                df_reference,
-                df_company,
-                on='Date',
-                how='left'
-            )
-
-            # Rename columns with company symbol
-            df_reference = df_reference.rename(columns={
-                'Stock_Close_USD': f'{symbol} (USD)',
-                'Valuation_Per_Share_INR': f'{symbol} (INR)'
+        # Create reference sheet - if no companies, create simple note sheet
+        if not symbols_in_portfolio:
+            df_reference = pd.DataFrame({
+                'Note': ['No company data fetched',
+                         'ByStatus and G&L files were not provided']
             })
+        else:
+            # Start with Date and TTBR columns from any company's matrix (TTBR is same for all)
+            first_symbol = symbols_in_portfolio[0]
+            first_company = self.get_company_details(first_symbol)
+            df_reference = first_company["matrix"][['Date', 'TTBR']].copy()
+            df_reference = df_reference.rename(columns={'TTBR': 'SBI TTBR'})
 
-        # Round all numeric columns to 2 decimal places
-        for col in df_reference.columns:
-            if col != 'Date':
-                df_reference[col] = df_reference[col].round(2)
+            # Add columns for each company (Symbol Price USD, Symbol Value INR)
+            for symbol in symbols_in_portfolio:
+                comp_info = self.get_company_details(symbol)
+                df_company = comp_info["matrix"][['Date', 'Stock_Close_USD', 'Valuation_Per_Share_INR']].copy()
+
+                # Merge with main reference dataframe on Date
+                df_reference = pd.merge(
+                    df_reference,
+                    df_company,
+                    on='Date',
+                    how='left'
+                )
+
+                # Rename columns with company symbol
+                df_reference = df_reference.rename(columns={
+                    'Stock_Close_USD': f'{symbol} (USD)',
+                    'Valuation_Per_Share_INR': f'{symbol} (INR)'
+                })
+
+            # Round all numeric columns to 2 decimal places
+            for col in df_reference.columns:
+                if col != 'Date':
+                    df_reference[col] = df_reference[col].round(2)
 
         # Create Pre-FY Acquisitions sheet for holdings acquired before the financial year
         pre_fy_data = []
@@ -2072,52 +2098,61 @@ class ScheduleFAApp:
         })
 
         # Create A2 Peak Calculation sheet - showing daily account values
-        df_a2_peak = self._daily_account_matrix[['Date', 'TTBR',
-                                                   'Total Account Value (USD)',
-                                                   'Total Account Value (INR)']].copy()
-        df_a2_peak = df_a2_peak.rename(columns={
-            'Date': 'Date',
-            'TTBR': 'SBI TTBR',
-            'Total Account Value (USD)': 'Total Account Value (USD)',
-            'Total Account Value (INR)': 'Total Account Value (INR)'
-        })
-        # Round values
-        df_a2_peak['SBI TTBR'] = df_a2_peak['SBI TTBR'].round(2)
-        df_a2_peak['Total Account Value (USD)'] = df_a2_peak['Total Account Value (USD)'].round(2)
-        df_a2_peak['Total Account Value (INR)'] = df_a2_peak['Total Account Value (INR)'].round(2)
+        # Check if we have actual account value columns (only present when holdings exist)
+        if 'Total Account Value (USD)' in self._daily_account_matrix.columns:
+            df_a2_peak = self._daily_account_matrix[['Date', 'TTBR',
+                                                       'Total Account Value (USD)',
+                                                       'Total Account Value (INR)']].copy()
+            df_a2_peak = df_a2_peak.rename(columns={
+                'Date': 'Date',
+                'TTBR': 'SBI TTBR',
+                'Total Account Value (USD)': 'Total Account Value (USD)',
+                'Total Account Value (INR)': 'Total Account Value (INR)'
+            })
+            # Round values
+            df_a2_peak['SBI TTBR'] = df_a2_peak['SBI TTBR'].round(2)
+            df_a2_peak['Total Account Value (USD)'] = df_a2_peak['Total Account Value (USD)'].round(2)
+            df_a2_peak['Total Account Value (INR)'] = df_a2_peak['Total Account Value (INR)'].round(2)
 
-        # Add peak summary (using plain values, not formatted strings, to avoid Excel errors)
-        peak_account_idx = df_a2_peak['Total Account Value (INR)'].idxmax()
-        peak_account_row = df_a2_peak.loc[peak_account_idx]
+            # Add peak summary (using plain values, not formatted strings, to avoid Excel errors)
+            peak_account_idx = df_a2_peak['Total Account Value (INR)'].idxmax()
+            peak_account_row = df_a2_peak.loc[peak_account_idx]
 
-        # Create summary columns with proper initialization
-        summary_labels = []
-        summary_values = []
+            # Create summary columns with proper initialization
+            summary_labels = []
+            summary_values = []
 
-        # Add peak summary data
-        summary_items = [
-            ('Peak Date', str(peak_account_row['Date'])),
-            ('TTBR', float(peak_account_row['SBI TTBR'])),
-            ('Account Value (USD)', float(peak_account_row['Total Account Value (USD)'])),
-            ('Account Value (INR)', round(peak_account_row['Total Account Value (INR)'], 2)),
-            ('', ''),
-            ('A2 Peak Balance (INR)', round(peak_account_row['Total Account Value (INR)'], 2))
-        ]
+            # Add peak summary data
+            summary_items = [
+                ('Peak Date', str(peak_account_row['Date'])),
+                ('TTBR', float(peak_account_row['SBI TTBR'])),
+                ('Account Value (USD)', float(peak_account_row['Total Account Value (USD)'])),
+                ('Account Value (INR)', round(peak_account_row['Total Account Value (INR)'], 2)),
+                ('', ''),
+                ('A2 Peak Balance (INR)', round(peak_account_row['Total Account Value (INR)'], 2))
+            ]
 
-        for label, value in summary_items:
-            summary_labels.append(label)
-            summary_values.append(value)
+            for label, value in summary_items:
+                summary_labels.append(label)
+                summary_values.append(value)
 
-        # Pad with empty strings to match DataFrame length
-        while len(summary_labels) < len(df_a2_peak):
-            summary_labels.append('')
-            summary_values.append('')
+            # Pad with empty strings to match DataFrame length
+            while len(summary_labels) < len(df_a2_peak):
+                summary_labels.append('')
+                summary_values.append('')
 
-        # Add summary columns with proper data
-        df_a2_peak['--'] = ''
-        df_a2_peak['--'] = ''
-        df_a2_peak['PEAK SUMMARY'] = summary_labels
-        df_a2_peak['Value'] = summary_values
+            # Add summary columns with proper data
+            df_a2_peak['--'] = ''
+            df_a2_peak['--'] = ''
+            df_a2_peak['PEAK SUMMARY'] = summary_labels
+            df_a2_peak['Value'] = summary_values
+        else:
+            # No holdings - create simple sheet showing "No holdings data"
+            df_a2_peak = pd.DataFrame({
+                'Note': ['No ByStatus or G&L files provided',
+                         'Cannot calculate daily account values',
+                         'Peak is set to 0 in Table A2']
+            })
 
         # Create Capital Gains sheet using EXTENDED PERIOD (Jan 1 - Mar 31 next year)
         # This calculates advance tax obligations based on sale date
@@ -3031,12 +3066,13 @@ class ScheduleFAApp:
             if col in df_a3_csv.columns:
                 df_a3_csv[col] = df_a3_csv[col].astype(str)
 
-        # Round numeric columns to integers (ITR portal requirement)
-        df_a3_csv["Initial value of the investment"] = df_a3_csv["Initial value of the investment"].round(0).astype(int)
-        df_a3_csv["Peak value of investment during the Period"] = df_a3_csv["Peak value of investment during the Period"].round(0).astype(int)
-        df_a3_csv["Closing balance"] = df_a3_csv["Closing balance"].round(0).astype(int)
-        df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"] = df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"].round(0).astype(int)
-        df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"] = df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"].round(0).astype(int)
+        # Round numeric columns to integers (ITR portal requirement) - only if columns exist
+        if "Initial value of the investment" in df_a3_csv.columns:
+            df_a3_csv["Initial value of the investment"] = df_a3_csv["Initial value of the investment"].round(0).astype(int)
+            df_a3_csv["Peak value of investment during the Period"] = df_a3_csv["Peak value of investment during the Period"].round(0).astype(int)
+            df_a3_csv["Closing balance"] = df_a3_csv["Closing balance"].round(0).astype(int)
+            df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"] = df_a3_csv["Total gross amount paid/credited with respect to the holding during the period"].round(0).astype(int)
+            df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"] = df_a3_csv["Total gross proceeds from sale or redemption of investment during the period"].round(0).astype(int)
 
         # Write A3 CSV (ITR portal format requirement)
         # Try simple format without quotes or trailing commas
@@ -3117,33 +3153,46 @@ if __name__ == "__main__":
     try:
         # Read E*TRADE files to discover company symbols
         print("[*] Reading E*TRADE export files to discover companies...")
-        df_open = pd.read_excel(BYSTATUS_FILE)
+
+        # ByStatus file is optional - only read if it exists
+        df_open = pd.DataFrame()
+        if os.path.exists(BYSTATUS_FILE):
+            df_open = pd.read_excel(BYSTATUS_FILE)
+        else:
+            print("[!] WARNING: ByStatus_expanded.xlsx not found")
+            print("[!] Table A3 will not include current holdings")
 
         # G&L file is optional - only read if it exists
-        df_sold = pd.DataFrame()  # Empty dataframe if no sales
+        df_sold = pd.DataFrame()
         if os.path.exists(GL_FILE):
             df_sold = pd.read_excel(GL_FILE)
         else:
-            print("")
-            print("=" * 70)
-            print("[WARNING] G&L_Expanded.xlsx not found!")
-            print("")
-            print("This file is REQUIRED if you sold ANY shares during the year.")
-            print("Without it:")
-            print("  - Table A3 will be INCOMPLETE (missing sold shares)")
-            print("  - Capital Gains will be EMPTY (missing tax calculations)")
-            print("")
-            print("Only continue if you are CERTAIN you had ZERO sales this year.")
-            print("=" * 70)
-            print("")
-            print("[i] Continuing without sales data...")
+            print("[!] WARNING: G&L_Expanded.xlsx not found")
+            print("[!] Table A3 will not include sold shares")
+            print("[!] Capital Gains will be empty")
 
         # Auto-discover unique symbols from input files
         symbols = set()
-        if 'Symbol' in df_open.columns:
+        if not df_open.empty and 'Symbol' in df_open.columns:
             symbols.update(df_open['Symbol'].dropna().unique())
         if not df_sold.empty and 'Symbol' in df_sold.columns:
             symbols.update(df_sold['Symbol'].dropna().unique())
+
+        # If no symbols found from files, use companies from config.json
+        if not symbols:
+            print("[i] No ByStatus or G&L files found - will use companies from config.json")
+            config_companies = config.get("table_a3_companies", {})
+            symbols = set(k for k in config_companies.keys() if not k.startswith('_'))
+            if not symbols:
+                print("")
+                print("=" * 70)
+                print("[ERROR] No company symbols found!")
+                print("Need either:")
+                print("  - etrade_inputs/ByStatus_expanded.xlsx (for holdings)")
+                print("  - etrade_inputs/G&L_Expanded.xlsx (for sales)")
+                print("  - OR companies configured in config.json")
+                print("=" * 70)
+                raise FileNotFoundError("No company symbols available for processing.")
 
         print(f"[OK] Discovered {len(symbols)} unique symbols: {', '.join(sorted(str(s).strip() for s in symbols))}")
 

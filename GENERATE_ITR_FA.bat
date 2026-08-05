@@ -66,14 +66,7 @@ if not exist etrade_inputs\ (
     echo   [i] Creating etrade_inputs folder...
     mkdir etrade_inputs
 )
-if not exist etrade_inputs\ByStatus_expanded.xlsx (
-    echo   [WARNING] ByStatus_expanded.xlsx not found in etrade_inputs/
-    echo   [i] Export from E*TRADE and place in etrade_inputs/ folder
-    echo.
-    pause
-    exit /b 1
-)
-echo   [OK] ByStatus_expanded.xlsx found
+echo   [i] Inputs folder ready
 echo.
 
 echo [3/5] Checking E*TRADE outputs folder...
@@ -136,28 +129,62 @@ if errorlevel 1 (
 echo   [OK] Python environment ready
 echo.
 
-echo [5/5] Checking for G^&L file (uses Python for reliable detection)...
-REM Check for G&L file using Python (more reliable than batch file escaping)
-venv\Scripts\python.exe -c "import os, sys; sys.exit(0 if os.path.exists('etrade_inputs/G&L_Expanded.xlsx') else 1)" 2>nul
-if errorlevel 1 (
+echo [5/5] Checking E*TRADE input files (uses Python for reliable detection^)...
+
+REM Check all three files
+venv\Scripts\python.exe -c "import os, glob, sys; b=os.path.exists('etrade_inputs/ByStatus_expanded.xlsx'); g=os.path.exists('etrade_inputs/G&L_Expanded.xlsx'); p=bool(glob.glob('etrade_inputs/ClientStatements_*.pdf')); print(f'{int(b)}{int(g)}{int(p)}')" > %TEMP%\file_check.txt 2>nul
+set /p FILE_STATUS=<%TEMP%\file_check.txt
+del %TEMP%\file_check.txt
+
+REM Parse results (format: ByStatus G&L PDF, e.g., "111" = all present)
+if "%FILE_STATUS%"=="000" (
     echo.
     echo   ======================================================================
-    echo   [WARNING] G^&L_Expanded.xlsx not found!
+    echo   [ERROR] No E*TRADE files found!
     echo.
-    echo   This file is REQUIRED if you sold ANY shares during the year.
-    echo   Without it:
-    echo     - Table A3 will be INCOMPLETE (missing sold shares held during calendar year^)
-    echo     - Capital Gains will be EMPTY (missing tax calculations^)
+    echo   Required files (at least one^):
+    echo     - etrade_inputs/ByStatus_expanded.xlsx
+    echo     - etrade_inputs/G^&L_Expanded.xlsx
+    echo     - etrade_inputs/ClientStatements_*.pdf
     echo.
-    echo   Only continue if you are CERTAIN you had ZERO sales this year.
+    echo   Please export files from E*TRADE and place in etrade_inputs/ folder
     echo   ======================================================================
     echo.
-    echo   Press Ctrl+C to stop, or
     pause
+    exit /b 1
+)
+
+REM Show what's found and what's missing with warnings
+echo.
+if "%FILE_STATUS:~0,1%"=="1" (
+    echo   [OK] ByStatus_expanded.xlsx found
 ) else (
+    echo   [WARNING] ByStatus_expanded.xlsx NOT found
+    echo             Table A3 will be EMPTY (no holdings to report^)
+)
+
+if "%FILE_STATUS:~1,1%"=="1" (
     echo   [OK] G^&L_Expanded.xlsx found
+) else (
+    echo   [WARNING] G^&L_Expanded.xlsx NOT found
+    echo             Table A3 will be INCOMPLETE (missing sold shares^)
+    echo             Capital Gains will be EMPTY (no sales to report^)
+)
+
+if "%FILE_STATUS:~2,1%"=="1" (
+    echo   [OK] ClientStatements_*.pdf found
+) else (
+    echo   [WARNING] ClientStatements_*.pdf NOT found
+    echo             Table A2 closing balance will be 0
 )
 echo.
+
+REM Only pause if any file is missing
+if not "%FILE_STATUS%"=="111" (
+    echo   Press Ctrl+C to stop, or
+    pause
+    echo.
+)
 
 echo Pre-flight checks complete!
 echo.
