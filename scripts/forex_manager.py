@@ -1,4 +1,8 @@
 """
+ITR-FA-GENERATOR - Schedule FA Generator for ITR2/ITR3
+Copyright (c) 2024-2026 Satvinder Singh
+Licensed under GNU General Public License
+
 Forex Manager
 Handles SBI TTBR exchange rate fetching and Rule 115(1)(f) logic
 """
@@ -25,7 +29,9 @@ class ForexManager:
             )
 
         print(f"[*] Reading local SBI forex data from {self.forex_csv_path}...")
-        self.forex_data = pd.read_csv(self.forex_csv_path, parse_dates=['Date'])
+        self.forex_data = pd.read_csv(self.forex_csv_path)
+        self.forex_data['Date'] = pd.to_datetime(self.forex_data['DATE'])
+        self.forex_data['TTBR'] = self.forex_data['TT BUY']
         print(f"[OK] Loaded {len(self.forex_data)} records from local CSV")
 
         # Filter for target year

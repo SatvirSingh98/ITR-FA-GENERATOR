@@ -1,4 +1,8 @@
 """
+ITR-FA-GENERATOR - Schedule FA Generator for ITR2/ITR3
+Copyright (c) 2024-2026 Satvinder Singh
+Licensed under GNU General Public License
+
 Tax Calculator
 Handles STCG/LTCG tax rate calculations for both New and Old regimes
 """
@@ -101,3 +105,153 @@ class TaxCalculator:
     def get_stcg_rate(self, regime='new'):
         """Get STCG rate for specified regime"""
         return self.stcg_rate_new if regime == 'new' else self.stcg_rate_old
+
+    def calculate_advance_tax_installment(self, tax_amount, sale_date):
+        """
+        Calculate advance tax installments per Rule 234C based on sale date
+
+        Args:
+            tax_amount (int): Total tax amount
+            sale_date: Sale date (datetime or string)
+
+        Returns:
+            dict: Installments for Jul/Sep/Dec/Mar deadlines
+        """
+        import pandas as pd
+
+        if isinstance(sale_date, str):
+            sale_date = pd.to_datetime(sale_date)
+
+        sale_month = sale_date.month
+
+        # Rule 234C: Advance tax schedule based on sale month
+        if sale_month <= 6:  # Apr 1 - Jun 30: All 4 deadlines apply
+            return {
+                'jul': math.ceil(tax_amount * 0.15),
+                'sep': math.ceil(tax_amount * 0.45),
+                'dec': math.ceil(tax_amount * 0.75),
+                'mar': tax_amount
+            }
+        elif sale_month <= 8:  # Jul 1 - Aug 31: Jul deadline passed
+            return {
+                'jul': 0,
+                'sep': math.ceil(tax_amount * 0.45),
+                'dec': math.ceil(tax_amount * 0.75),
+                'mar': tax_amount
+            }
+        elif sale_month <= 11:  # Sep 1 - Nov 30: Jul/Sep deadlines passed
+            return {
+                'jul': 0,
+                'sep': 0,
+                'dec': math.ceil(tax_amount * 0.75),
+                'mar': tax_amount
+            }
+        else:  # Dec 1 - Mar 31: Only Mar 15 deadline applies
+            return {
+                'jul': 0,
+                'sep': 0,
+                'dec': 0,
+                'mar': tax_amount
+            }
+
+    def group_sales_by_period(self, sales_data):
+        """
+        Group sales by advance tax deadline period
+
+        Args:
+            sales_data (list): List of sale dicts with 'Sale Date' and tax info
+
+        Returns:
+            list: Grouped rows with period summaries
+        """
+        import pandas as pd
+
+        if not sales_data:
+            return []
+
+        def get_fy_year(date):
+            """Get financial year from date"""
+            return date.year if date.month >= 4 else date.year - 1
+
+        # Group sales by period
+        group1 = []  # Apr 1 - Jul 15
+        group2 = []  # Jul 16 - Sep 15
+        group3 = []  # Sep 16 - Dec 15
+        group4 = []  # Dec 16 - Mar 31
+
+        for item in sales_data:
+            sale_date = pd.to_datetime(item['Sale Date'])
+            month = sale_date.month
+            day = sale_date.day
+
+            if (month >= 4 and month <= 6) or (month == 7 and day <= 15):
+                group1.append(item)
+            elif (month == 7 and day > 15) or month == 8 or (month == 9 and day <= 15):
+                group2.append(item)
+            elif (month == 9 and day > 15) or month == 10 or month == 11 or (month == 12 and day <= 15):
+                group3.append(item)
+            else:  # Dec 16 - Mar 31
+                group4.append(item)
+
+        # Build summary rows
+        result = []
+
+        if group1:
+            fy_year = get_fy_year(pd.to_datetime(group1[0]['Sale Date']))
+            result.append({
+                'Sale Period': f'Apr 1 - Jul 15, {fy_year}',
+                'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                'Tax Type': 'Advance Tax',
+                'Total Tax (INR)': sum(item['Tax Amount (INR)'] for item in group1),
+                'By Jul 15': sum(item['Adv Tax by Jul 15 (15%)'] for item in group1),
+                'By Sep 15': sum(item['Adv Tax by Sep 15 (45%)'] for item in group1),
+                'By Dec 15': sum(item['Adv Tax by Dec 15 (75%)'] for item in group1),
+                'By Mar 15': sum(item['Adv Tax by Mar 15 (100%)'] for item in group1),
+                'Note': 'All 4 deadlines apply'
+            })
+
+        if group2:
+            fy_year = get_fy_year(pd.to_datetime(group2[0]['Sale Date']))
+            result.append({
+                'Sale Period': f'Jul 16 - Sep 15, {fy_year}',
+                'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                'Tax Type': 'Advance Tax',
+                'Total Tax (INR)': sum(item['Tax Amount (INR)'] for item in group2),
+                'By Jul 15': sum(item['Adv Tax by Jul 15 (15%)'] for item in group2),
+                'By Sep 15': sum(item['Adv Tax by Sep 15 (45%)'] for item in group2),
+                'By Dec 15': sum(item['Adv Tax by Dec 15 (75%)'] for item in group2),
+                'By Mar 15': sum(item['Adv Tax by Mar 15 (100%)'] for item in group2),
+                'Note': 'Jul 15 deadline passed'
+            })
+
+        if group3:
+            fy_year = get_fy_year(pd.to_datetime(group3[0]['Sale Date']))
+            result.append({
+                'Sale Period': f'Sep 16 - Dec 15, {fy_year}',
+                'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                'Tax Type': 'Advance Tax',
+                'Total Tax (INR)': sum(item['Tax Amount (INR)'] for item in group3),
+                'By Jul 15': sum(item['Adv Tax by Jul 15 (15%)'] for item in group3),
+                'By Sep 15': sum(item['Adv Tax by Sep 15 (45%)'] for item in group3),
+                'By Dec 15': sum(item['Adv Tax by Dec 15 (75%)'] for item in group3),
+                'By Mar 15': sum(item['Adv Tax by Mar 15 (100%)'] for item in group3),
+                'Note': 'Jul/Sep deadlines passed'
+            })
+
+        if group4:
+            fy_year = get_fy_year(pd.to_datetime(group4[0]['Sale Date']))
+            # Handle year transition: Dec-Mar crosses calendar year
+            year_display = fy_year if pd.to_datetime(group4[0]['Sale Date']).month >= 4 else fy_year
+            result.append({
+                'Sale Period': f'Dec 16, {year_display} - Mar 31, {year_display+1}',
+                'Financial Year': f'FY {fy_year}-{str(fy_year+1)[-2:]}',
+                'Tax Type': 'Advance Tax',
+                'Total Tax (INR)': sum(item['Tax Amount (INR)'] for item in group4),
+                'By Jul 15': sum(item['Adv Tax by Jul 15 (15%)'] for item in group4),
+                'By Sep 15': sum(item['Adv Tax by Sep 15 (45%)'] for item in group4),
+                'By Dec 15': sum(item['Adv Tax by Dec 15 (75%)'] for item in group4),
+                'By Mar 15': sum(item['Adv Tax by Mar 15 (100%)'] for item in group4),
+                'Note': 'Only Mar 15 deadline applies'
+            })
+
+        return result
