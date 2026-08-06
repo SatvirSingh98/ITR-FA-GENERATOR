@@ -57,14 +57,15 @@ if not errorlevel 1 (
         exit /b 1
     )
 
-    REM Check if target_year exists and is non-empty
+    REM Check if target_year exists - if missing, will handle it after venv setup
     python -c "import json; cfg=json.load(open('config.json')); exit(0 if cfg.get('target_year') else 1)" 2>nul
     if errorlevel 1 (
-        echo   [ERROR] target_year field is missing or empty in config.json
-        echo   [i] Please set target_year to the calendar year for ITR filing
+        set TARGET_YEAR_MISSING=1
+        echo   [WARNING] target_year field is missing in config.json
+        echo   [i] Will prompt for auto-fix after Python environment setup
         echo.
-        pause
-        exit /b 1
+    ) else (
+        set TARGET_YEAR_MISSING=0
     )
 
     echo   [OK] Config is valid
@@ -147,11 +148,43 @@ REM ============================================================
 
 echo [*] Validating target year for ITR filing...
 
-REM Get target_year from config.json
-for /f "delims=" %%i in ('venv\Scripts\python.exe -c "import json; print(json.load(open('config.json'))['target_year'])"') do set CONFIG_YEAR=%%i
-
 REM Calculate expected year (current year - 1 for ITR filing)
 for /f "delims=" %%i in ('venv\Scripts\python.exe -c "from datetime import datetime; print(datetime.now().year - 1)"') do set EXPECTED_YEAR=%%i
+
+REM If target_year was missing, prompt to add it now
+if "%TARGET_YEAR_MISSING%"=="1" (
+    echo.
+    echo   ======================================================================
+    echo   [ERROR] target_year field is missing in config.json
+    echo   ======================================================================
+    echo   Expected year: %EXPECTED_YEAR% ^(current year - 1^)
+    echo.
+    echo   What would you like to do?
+    echo     1. Exit and manually add target_year to config.json
+    echo     2. Automatically set target_year to %EXPECTED_YEAR% and continue
+    echo.
+    set /p MISSING_YEAR_CHOICE="Enter your choice (1-2): "
+
+    if "!MISSING_YEAR_CHOICE!"=="1" (
+        echo   [i] Exiting... Please add target_year to config.json
+        pause
+        exit /b 1
+    ) else if "!MISSING_YEAR_CHOICE!"=="2" (
+        echo   [i] Setting target_year to !EXPECTED_YEAR!
+        venv\Scripts\python.exe -c "import json; cfg=json.load(open('config.json')); cfg['target_year']=int(!EXPECTED_YEAR!); json.dump(cfg, open('config.json', 'w'), indent=2)"
+        echo   [OK] Updated config.json with target_year: !EXPECTED_YEAR!
+        set CONFIG_YEAR=!EXPECTED_YEAR!
+        set FINAL_YEAR=!EXPECTED_YEAR!
+        echo.
+    ) else (
+        echo   [ERROR] Invalid choice
+        pause
+        exit /b 1
+    )
+) else (
+    REM Get target_year from config.json
+    for /f "delims=" %%i in ('venv\Scripts\python.exe -c "import json; print(json.load(open('config.json'))['target_year'])"') do set CONFIG_YEAR=%%i
+)
 
 echo   [i] Config year: %CONFIG_YEAR%
 echo   [i] Expected ITR year (current - 1): %EXPECTED_YEAR%
