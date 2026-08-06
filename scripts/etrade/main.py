@@ -182,12 +182,12 @@ def main():
         client_statement_closing_usd=closing_balance_usd
     )
 
-    # Generate Table A3 (Equity Interest Holdings) - simplified Phase 2A
-    # Full implementation with peak calculations deferred to Phase 2B
+    # Generate Table A3 (Equity Interest Holdings) - PHASE 2B full implementation
     df_table_a3 = fa_generator.generate_table_a3(
         df_open=df_open,
         df_sold_calendar=df_sold_calendar,
-        company_details_cache=company_details_cache  # Now populated with Yahoo Finance data
+        company_details_cache=company_details_cache,  # Populated with Yahoo Finance data
+        df_dividends=df_dividends  # Pass dividends for per-lot allocation
     )
 
     # Step 7: Generate Schedule OS and FSI
@@ -246,7 +246,7 @@ def main():
         if not df_table_a3.empty:
             df_table_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
         else:
-            pd.DataFrame({'Note': ['Table A3 - Phase 2B (Full peak/dividend logic pending)']}).to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
+            pd.DataFrame({'Note': ['No Table A3 data']}).to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
 
         # Write Schedule OS and FSI
         if not df_schedule_os.empty:
@@ -293,9 +293,10 @@ def main():
     print(f"  - Table A3 Equity Interest")
     print(f"  - Schedule OS (Other Sources)")
     print(f"  - Schedule FSI (Foreign Source Income)")
-    print(f"\nNOTE: Phase 2A - Modular architecture with YahooScraper integrated.")
-    print(f"      Table A3 peak/dividend calculations deferred to Phase 2B.")
-    print(f"      Capital Gains (dual-regime), Schedule OS, Schedule FSI fully working!")
+    print(f"\nNOTE: Phase 2B - Complete modular architecture!")
+    print(f"      [OK] Table A3 peak calculations & dividend allocation")
+    print(f"      [OK] Capital Gains (dual-regime), Schedule OS, Schedule FSI")
+    print(f"      [OK] YahooScraper for company data & stock prices")
 
 
 if __name__ == "__main__":

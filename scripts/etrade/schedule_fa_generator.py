@@ -6,8 +6,7 @@ Licensed under GNU General Public License
 ScheduleFAGenerator
 Handles Table A2 (Custodial Account) and Table A3 (Equity Interest) generation
 
-NOTE: This is a simplified Phase 2A implementation.
-      Complex peak calculations and dividend allocations will be refactored in Phase 2B.
+PHASE 2B: Full implementation with modular peak calculations and dividend allocation.
 """
 
 import pandas as pd
@@ -15,6 +14,11 @@ import PyPDF2
 import re
 import os
 import glob
+
+from scripts.etrade.matrix_builder import MatrixBuilder
+from scripts.etrade.peak_calculator import PeakCalculator
+from scripts.etrade.dividend_allocator import DividendAllocator
+from scripts.etrade.tranche_processor import TrancheProcessor
 
 
 class ScheduleFAGenerator:
@@ -40,6 +44,12 @@ class ScheduleFAGenerator:
         self.assessment_year = f"{calendar_year + 1}-{str(calendar_year + 2)[-2:]}"
 
         self.extracted_account_number = None
+
+        # Initialize Phase 2B modular components
+        self.matrix_builder = MatrixBuilder(forex_manager)
+        self.peak_calculator = PeakCalculator(self.matrix_builder, calendar_year)
+        self.dividend_allocator = DividendAllocator()
+        self.tranche_processor = TrancheProcessor(self.peak_calculator, self.dividend_allocator)
 
     @staticmethod
     def clean_text_for_itr(text):
@@ -251,40 +261,64 @@ class ScheduleFAGenerator:
 
         return df_a2
 
-    def generate_table_a3(self, df_open, df_sold_calendar, company_details_cache):
+    def generate_table_a3(self, df_open, df_sold_calendar, company_details_cache, df_dividends=None):
         """
         Generate Table A3 (Equity Interest Holdings).
 
-        NOTE: This is a SIMPLIFIED Phase 2A implementation.
-              Full peak/dividend allocation will be added in Phase 2B.
+        PHASE 2B: Full implementation with peak calculations and dividend allocation.
 
         Args:
             df_open (DataFrame): Open holdings from ByStatus
             df_sold_calendar (DataFrame): Sales in calendar year from G&L
-            company_details_cache (dict): {symbol: {name, address, zip, country_name, country_code}}
+            company_details_cache (dict): {symbol: {name, address, zip, country_name, country_code, matrix}}
+            df_dividends (DataFrame, optional): Dividend data for allocation
 
         Returns:
             DataFrame: Table A3 data
         """
         print("\n[*] Generating Table A3 (Equity Interest)...")
-        print("[!] Using simplified Phase 2A implementation (peak/dividend allocation pending Phase 2B)")
-
-        equity_tranches = []
-
-        # TODO Phase 2B: Full tranche processing with peak calculations
-        # For now, create basic placeholder entries
+        print("[*] Using PHASE 2B full implementation with peak calculations")
 
         if df_open.empty and (df_sold_calendar is None or df_sold_calendar.empty):
             print("[!] No holdings or sales data - Table A3 will be empty")
             return pd.DataFrame()
 
-        # Simplified: Just show that we have the structure in place
-        # Real implementation in Phase 2B will process each holding/sale with peak calculations
-        print(f"[i] Found {len(df_open)} open holdings and {len(df_sold_calendar) if df_sold_calendar is not None and not df_sold_calendar.empty else 0} sales")
-        print("[!] Full Table A3 generation deferred to Phase 2B (complex peak/dividend logic)")
+        # Step 1: Process open holdings into tranches
+        print(f"[*] Processing {len(df_open)} open holdings...")
+        tranches_open = self.tranche_processor.process_holdings(df_open, company_details_cache)
 
-        # Return empty for now - will be filled in Phase 2B
-        df_a3 = pd.DataFrame(equity_tranches)
-        print(f"[OK] Table A3 placeholder ready (full implementation pending Phase 2B)")
+        # Step 2: Process sales into tranches
+        tranches_sold = []
+        if df_sold_calendar is not None and not df_sold_calendar.empty:
+            print(f"[*] Processing {len(df_sold_calendar)} sales...")
+            tranches_sold = self.tranche_processor.process_sales(df_sold_calendar, company_details_cache)
+
+        # Combine all tranches
+        all_tranches = tranches_open + tranches_sold
+        print(f"[*] Total tranches to process: {len(all_tranches)}")
+
+        # Step 3: Allocate dividends to tranches
+        dividend_allocations = {}
+        if df_dividends is not None and not df_dividends.empty:
+            print(f"[*] Allocating {len(df_dividends)} dividend payments to tranches...")
+            dividend_allocations = self.dividend_allocator.allocate_dividends(all_tranches, df_dividends)
+            print(f"[OK] Dividends allocated to {len(dividend_allocations)} tranches")
+
+        # Step 4: Generate Table A3 rows with peak calculations
+        print("[*] Calculating peak values and generating Table A3 rows...")
+        table_a3_rows = self.tranche_processor.generate_table_a3_rows(
+            all_tranches,
+            company_details_cache,
+            dividend_allocations
+        )
+
+        df_a3 = pd.DataFrame(table_a3_rows)
+
+        if not df_a3.empty:
+            # Sort by acquisition date
+            df_a3 = df_a3.sort_values('InterestAcquiringDate')
+            print(f"[OK] Table A3 generated with {len(df_a3)} row(s)")
+        else:
+            print("[!] Table A3 is empty (no valid tranches)")
 
         return df_a3
