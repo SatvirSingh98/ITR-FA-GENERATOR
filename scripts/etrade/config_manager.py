@@ -49,8 +49,24 @@ class ConfigManager:
         self.config[key] = value
 
     def get_target_year(self):
-        """Get target calendar year"""
-        return self.config.get('target_year', 2025)
+        """
+        Get target calendar year for ITR filing.
+
+        Returns previous year if not specified in config.
+        (ITR filing is for the previous calendar year)
+        """
+        from datetime import datetime
+
+        target_year = self.config.get('target_year')
+
+        # If target_year is specified in config, use it
+        if target_year:
+            return int(target_year)
+
+        # Otherwise, auto-detect: previous year
+        # (ITR filing in 2026 is for calendar year 2025)
+        current_year = datetime.now().year
+        return current_year - 1
 
     def get_account_info(self):
         """Get custodial account information"""

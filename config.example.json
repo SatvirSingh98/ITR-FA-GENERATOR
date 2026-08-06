@@ -5,6 +5,7 @@
   "_NOTE": "table_a3_companies will be auto-populated - leave it empty!",
 
   "target_year": 2025,
+  "_TARGET_YEAR_NOTE": "Optional: Leave blank/null to auto-detect (previous year). Example: Filing in 2026 → auto-detects 2025. Override for past years if needed.",
 
   "disclose_unvested_rsu": false,
   "_UNVESTED_RSU_NOTE": "Set to true for conservative approach (disclose unvested RSUs as beneficial interest). Most CAs recommend false (defer until vesting). See: https://itrfa.in/blog/rsu-schedule-fa-india",
