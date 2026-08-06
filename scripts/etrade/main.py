@@ -92,8 +92,62 @@ def main():
         # Reload forex data with extra dates
         forex_manager.load_forex_data()  # This would need enhancement to accept extra_dates
 
+    # Step 4a: Scrape company details and stock prices from Yahoo Finance
+    print(f"\n[4a/8] Scraping company details from Yahoo Finance...")
+    yahoo_scraper = YahooFinanceScraper(calendar_year=calendar_year)
+    company_details_cache = {}
+
+    if companies:
+        print(f"[*] Found {len(companies)} unique companies: {', '.join(companies)}")
+        for symbol in companies:
+            print(f"\n[*] Processing {symbol}...")
+
+            # Scrape company profile
+            profile = yahoo_scraper.scrape_company_profile(symbol)
+
+            # Scrape stock prices for calendar year
+            df_prices = yahoo_scraper.scrape_stock_prices(symbol)
+
+            # Build price matrix with TTBR
+            if not df_prices.empty:
+                # Merge stock prices with TTBR rates
+                df_matrix = pd.merge(
+                    df_prices,
+                    forex_manager.forex_data[['Date', 'TTBR']],
+                    on='Date',
+                    how='left'
+                )
+                # Calculate per-share valuation in INR
+                df_matrix['Valuation_Per_Share_INR'] = df_matrix['Stock_Close_USD'] * df_matrix['TTBR']
+
+                # Store in cache
+                company_details_cache[symbol] = {
+                    'name': profile['company_name'],
+                    'address': profile['company_address'],
+                    'zip': profile['zip_code'],
+                    'country_name': profile['country_name'],
+                    'country_code': profile['country_code'],
+                    'matrix': df_matrix  # Date, Stock_Close_USD, TTBR, Valuation_Per_Share_INR
+                }
+                print(f"[OK] {symbol}: {len(df_matrix)} days of price data")
+            else:
+                print(f"[!] WARNING: No price data for {symbol}")
+                # Still add basic profile info
+                company_details_cache[symbol] = {
+                    'name': profile['company_name'],
+                    'address': profile['company_address'],
+                    'zip': profile['zip_code'],
+                    'country_name': profile['country_name'],
+                    'country_code': profile['country_code'],
+                    'matrix': pd.DataFrame()
+                }
+
+        print(f"\n[OK] Company details cache built for {len(company_details_cache)} companies")
+    else:
+        print("[i] No companies discovered from E*TRADE files")
+
     # Step 5: Generate Capital Gains (dual-regime)
-    print("\n[5/8] Generating capital gains...")
+    print("\n[5/9] Generating capital gains...")
     cg_generator = CapitalGainsGenerator(forex_manager, tax_calculator)
 
     # Process sales to get base capital gains data
@@ -112,7 +166,7 @@ def main():
     print(f"[OK] Old Regime Total Tax: INR {sum(item['Tax Amount (INR)'] for item in capital_gains_old):,}" if capital_gains_old else "[OK] No capital gains")
 
     # Step 6: Generate Schedule FA (Table A2, A3)
-    print("\n[6/8] Generating Schedule FA...")
+    print("\n[6/9] Generating Schedule FA...")
     fa_generator = ScheduleFAGenerator(forex_manager, config_manager, calendar_year=calendar_year)
 
     # Read ClientStatement for closing balance
@@ -130,11 +184,11 @@ def main():
     df_table_a3 = fa_generator.generate_table_a3(
         df_open=df_open,
         df_sold_calendar=df_sold_calendar,
-        company_details_cache={}  # TODO Phase 2B: populate with scraped company details
+        company_details_cache=company_details_cache  # Now populated with Yahoo Finance data
     )
 
     # Step 7: Generate Schedule OS and FSI
-    print("\n[7/8] Generating Schedule OS and FSI...")
+    print("\n[7/9] Generating Schedule OS and FSI...")
     os_fsi_generator = ScheduleOSFSIGenerator(forex_manager, calendar_year=calendar_year)
 
     # Calculate Schedule OS (Other Sources - Dividend Income)
@@ -150,7 +204,7 @@ def main():
     df_schedule_fsi = os_fsi_generator.calculate_schedule_fsi(df_dividends, df_cg_for_fsi)
 
     # Step 8: Write Excel output with professional formatting
-    print("\n[8/8] Writing Excel output...")
+    print("\n[8/9] Writing Excel output...")
     output_file = f"ITR_FA_ETRADE_{calendar_year}.xlsx"
 
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
@@ -217,14 +271,28 @@ def main():
         formatter.format_workbook(writer, sheet_configs)
 
     print(f"[OK] Excel file created: {output_file}")
+
+    # Step 9: Summary
+    print("\n[9/9] Summary...")
     print("\n" + "=" * 80)
     print("SUCCESS - ITR-FA-GENERATOR completed!")
     print("=" * 80)
     print(f"\nGenerated files:")
     print(f"  - {output_file}")
-    print("\nNOTE: Phase 2A - Modular architecture with simplified Schedule FA.")
-    print("      Table A3 peak/dividend calculations deferred to Phase 2B.")
-    print("      Capital Gains (dual-regime), Schedule OS, Schedule FSI fully working!")
+    print(f"\nData processed:")
+    print(f"  - Companies scraped: {len(company_details_cache)}")
+    print(f"  - Holdings processed: {len(df_open)}")
+    print(f"  - Sales in calendar year: {len(df_sold_calendar)}")
+    print(f"  - Dividends: {len(df_dividends)}")
+    print(f"\nSheets generated:")
+    print(f"  - Capital Gains (dual-regime)")
+    print(f"  - Table A2 Custodial Acc")
+    print(f"  - Table A3 Equity Interest")
+    print(f"  - Schedule OS (Other Sources)")
+    print(f"  - Schedule FSI (Foreign Source Income)")
+    print(f"\nNOTE: Phase 2A - Modular architecture with YahooScraper integrated.")
+    print(f"      Table A3 peak/dividend calculations deferred to Phase 2B.")
+    print(f"      Capital Gains (dual-regime), Schedule OS, Schedule FSI fully working!")
 
 
 if __name__ == "__main__":
