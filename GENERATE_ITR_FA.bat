@@ -46,7 +46,7 @@ if not exist config.json (
     )
 )
 
-REM Validate JSON syntax only if Python is available (full check happens later)
+REM Validate JSON syntax and check target_year field
 python --version >nul 2>&1
 if not errorlevel 1 (
     python -c "import json; json.load(open('config.json'))" 2>nul
@@ -56,6 +56,17 @@ if not errorlevel 1 (
         pause
         exit /b 1
     )
+
+    REM Check if target_year exists and is non-empty
+    python -c "import json; cfg=json.load(open('config.json')); exit(0 if cfg.get('target_year') else 1)" 2>nul
+    if errorlevel 1 (
+        echo   [ERROR] target_year field is missing or empty in config.json
+        echo   [i] Please set target_year to the calendar year for ITR filing
+        echo.
+        pause
+        exit /b 1
+    )
+
     echo   [OK] Config is valid
 ) else (
     echo   [OK] Config exists (will validate after Python setup)
@@ -128,6 +139,94 @@ if errorlevel 1 (
     exit /b 1
 )
 echo   [OK] Python environment ready
+echo.
+
+REM ============================================================
+REM STEP 1.5: Validate target_year
+REM ============================================================
+
+echo [*] Validating target year for ITR filing...
+
+REM Get target_year from config.json
+for /f "delims=" %%i in ('venv\Scripts\python.exe -c "import json; print(json.load(open('config.json'))['target_year'])"') do set CONFIG_YEAR=%%i
+
+REM Calculate expected year (current year - 1 for ITR filing)
+for /f "delims=" %%i in ('venv\Scripts\python.exe -c "from datetime import datetime; print(datetime.now().year - 1)"') do set EXPECTED_YEAR=%%i
+
+echo   [i] Config year: %CONFIG_YEAR%
+echo   [i] Expected ITR year (current - 1): %EXPECTED_YEAR%
+
+REM Check if config year is greater than expected year (future year - not allowed)
+if %CONFIG_YEAR% GTR %EXPECTED_YEAR% (
+    echo.
+    echo   ======================================================================
+    echo   [ERROR] Invalid year in config.json!
+    echo   ======================================================================
+    echo   Config has: %CONFIG_YEAR%
+    echo   Maximum allowed: %EXPECTED_YEAR%
+    echo.
+    echo   ITR filing cannot be done for future years.
+    echo   The target year must be current year - 1 or earlier.
+    echo   ======================================================================
+    echo.
+    echo   What would you like to do?
+    echo     1. Exit and manually edit config.json
+    echo     2. Automatically update to %EXPECTED_YEAR% and continue
+    echo.
+    set /p FUTURE_YEAR_CHOICE="Enter your choice (1-2): "
+
+    if "!FUTURE_YEAR_CHOICE!"=="1" (
+        echo   [i] Exiting... Please edit config.json manually.
+        pause
+        exit /b 1
+    ) else if "!FUTURE_YEAR_CHOICE!"=="2" (
+        set FINAL_YEAR=!EXPECTED_YEAR!
+        echo   [i] Updating to expected year: !EXPECTED_YEAR!
+        REM Update config.json with expected year
+        venv\Scripts\python.exe -c "import json; cfg=json.load(open('config.json')); cfg['target_year']=int(!EXPECTED_YEAR!); json.dump(cfg, open('config.json', 'w'), indent=2)"
+        echo   [OK] Updated config.json with year !EXPECTED_YEAR!
+        echo.
+    ) else (
+        echo   [ERROR] Invalid choice
+        pause
+        exit /b 1
+    )
+)
+
+REM Check if config year is less than expected year (past year)
+if %CONFIG_YEAR% LSS %EXPECTED_YEAR% (
+    echo.
+    echo   ======================================================================
+    echo   [WARNING] Year mismatch detected!
+    echo   ======================================================================
+    echo   Config has: %CONFIG_YEAR%
+    echo   Expected:   %EXPECTED_YEAR% ^(for ITR filing in current year^)
+    echo.
+    echo   Which year do you want to use?
+    echo     1. Use config.json year ^(%CONFIG_YEAR%^) - for past year filing
+    echo     2. Use expected year ^(%EXPECTED_YEAR%^) - for current ITR filing
+    echo.
+    set /p YEAR_CHOICE="Enter your choice (1-2): "
+
+    if "!YEAR_CHOICE!"=="1" (
+        set FINAL_YEAR=!CONFIG_YEAR!
+        echo   [i] Using config.json year: !CONFIG_YEAR!
+    ) else if "!YEAR_CHOICE!"=="2" (
+        set FINAL_YEAR=!EXPECTED_YEAR!
+        echo   [i] Using expected year: !EXPECTED_YEAR!
+        REM Update config.json with new year
+        venv\Scripts\python.exe -c "import json; cfg=json.load(open('config.json')); cfg['target_year']=int(!EXPECTED_YEAR!); json.dump(cfg, open('config.json', 'w'), indent=2)"
+        echo   [OK] Updated config.json with year !EXPECTED_YEAR!
+    ) else (
+        echo   [ERROR] Invalid choice
+        pause
+        exit /b 1
+    )
+    echo.
+) else (
+    set FINAL_YEAR=%CONFIG_YEAR%
+    echo   [OK] Year validated: %CONFIG_YEAR%
+)
 echo.
 
 echo [5/5] Checking E*TRADE input files (uses Python for reliable detection^)...
@@ -258,6 +357,7 @@ if "%FILE_STATUS:~1,1%"=="1" (
 )
 
 echo [*] Starting Schedule FA generation...
+echo [i] Target year: %FINAL_YEAR%
 venv\Scripts\python.exe scripts\etrade\itr_fa_etrade.py --income-bracket %INCOME_CHOICE% > output_summary.txt 2>&1
 
 if errorlevel 1 (

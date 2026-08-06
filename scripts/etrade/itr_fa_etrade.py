@@ -867,20 +867,22 @@ class ScheduleFAApp:
 
                 # Find and fill the startDate field (format: mm/dd/yyyy)
                 # Yahoo Finance might exclude boundaries, so request one day earlier
-                print("[*] Setting start date to 12/31/2024 (to ensure we get 01/01/2025)...")
+                start_date_str = f"12/31/{self.calendar_year - 1}"
+                print(f"[*] Setting start date to {start_date_str} (to ensure we get 01/01/{self.calendar_year})...")
                 start_date_input = driver.find_element(By.CSS_SELECTOR, "input[name='startDate']")
                 start_date_input.clear()
                 time.sleep(0.5)
-                start_date_input.send_keys("12/31/2024")
+                start_date_input.send_keys(start_date_str)
                 time.sleep(1)
 
                 # Find and fill the endDate field (format: mm/dd/yyyy)
-                # Request one day later to ensure we get 12/31/2025
-                print("[*] Setting end date to 01/01/2026 (to ensure we get 12/31/2025)...")
+                # Request one day later to ensure we get 12/31 of target year
+                end_date_str = f"01/01/{self.calendar_year + 1}"
+                print(f"[*] Setting end date to {end_date_str} (to ensure we get 12/31/{self.calendar_year})...")
                 end_date_input = driver.find_element(By.CSS_SELECTOR, "input[name='endDate']")
                 end_date_input.clear()
                 time.sleep(0.5)
-                end_date_input.send_keys("01/01/2026")
+                end_date_input.send_keys(end_date_str)
                 time.sleep(1)
 
                 # Try multiple selectors for Done button
@@ -902,7 +904,7 @@ class ScheduleFAApp:
                             done_button = driver.find_element(By.CSS_SELECTOR, selector)
                         done_button.click()
                         done_clicked = True
-                        print("[OK] Set date range: 12/31/2024 - 01/01/2026 (will filter to 2025), clicked Done")
+                        print(f"[OK] Set date range: {start_date_str} - {end_date_str} (will filter to {self.calendar_year}), clicked Done")
                         break
                     except:
                         continue
@@ -3354,11 +3356,13 @@ class ScheduleFAApp:
 if __name__ == "__main__":
 
     # CONFIGURATION
-    TARGET_YEAR = 2025
     # Load configuration from config.json
     config = load_config()
 
-    TARGET_YEAR = config.get("target_year", 2025)
+    # Get target year from config (required field, validated by BAT file)
+    # Fallback: auto-detect as (current year - 1) for ITR filing
+    from datetime import datetime
+    TARGET_YEAR = config.get("target_year", datetime.now().year - 1)
     # Get account number from custodial_account
     custodial_acc = config.get("custodial_account", {})
     ACCOUNT_NUMBER = custodial_acc.get("account_number", "")
