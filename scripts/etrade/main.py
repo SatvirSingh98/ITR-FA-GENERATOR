@@ -208,9 +208,21 @@ def main():
 
     # Step 8: Write Excel output with professional formatting
     print("\n[8/9] Writing Excel output...")
-    output_file = f"ITR_FA_ETRADE_{calendar_year}.xlsx"
 
-    with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    # Create output directory if needed
+    output_dir = "etrade_outputs"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Indian FY for filenames (e.g., "2025-26")
+    indian_fy = f"{calendar_year}-{str(calendar_year + 1)[-2:]}"
+
+    # Output files
+    excel_file = os.path.join(output_dir, f"schedule_fa_{indian_fy}.xlsx")
+    csv_a2_file = os.path.join(output_dir, f"schedule_fa_{indian_fy}_table_a2.csv")
+    csv_a3_file = os.path.join(output_dir, f"schedule_fa_{indian_fy}_table_a3.csv")
+    json_file = os.path.join(output_dir, f"schedule_fa_{indian_fy}.json")
+
+    with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
         # Write Capital Gains sheet (dual-regime)
         # Row 1: NEW TAX REGIME header
         regime_header_new = pd.DataFrame([['NEW TAX REGIME - Capital Gains Calculation']])
@@ -273,7 +285,34 @@ def main():
         }
         formatter.format_workbook(writer, sheet_configs)
 
-    print(f"[OK] Excel file created: {output_file}")
+    print(f"[OK] Excel file created: {excel_file}")
+
+    # Export Table A2 and A3 as CSV files (for ITR portal upload)
+    print("\n[8a/9] Exporting CSV files for ITR portal...")
+    if not df_table_a2.empty:
+        df_table_a2.to_csv(csv_a2_file, index=False)
+        print(f"[OK] Table A2 CSV: {csv_a2_file}")
+
+    if not df_table_a3.empty:
+        df_table_a3.to_csv(csv_a3_file, index=False)
+        print(f"[OK] Table A3 CSV: {csv_a3_file}")
+
+    # Export JSON for CA review (optional)
+    print("\n[8b/9] Exporting JSON for CA review...")
+    json_data = {
+        "IndianFinancialYear": indian_fy,
+        "AssessmentYear": f"{calendar_year + 1}-{str(calendar_year + 2)[-2:]}",
+        "CalendarYear": calendar_year,
+        "TableA2": df_table_a2.to_dict(orient='records') if not df_table_a2.empty else [],
+        "TableA3": df_table_a3.to_dict(orient='records') if not df_table_a3.empty else [],
+        "ScheduleOS": df_schedule_os.to_dict(orient='records') if not df_schedule_os.empty else [],
+        "ScheduleFSI": df_schedule_fsi.to_dict(orient='records') if not df_schedule_fsi.empty else []
+    }
+
+    import json
+    with open(json_file, 'w') as f:
+        json.dump(json_data, f, indent=2, default=str)
+    print(f"[OK] JSON file: {json_file}")
 
     # Step 9: Summary
     print("\n[9/9] Summary...")
@@ -281,7 +320,10 @@ def main():
     print("SUCCESS - ITR-FA-GENERATOR completed!")
     print("=" * 80)
     print(f"\nGenerated files:")
-    print(f"  - {output_file}")
+    print(f"  - {excel_file}")
+    print(f"  - {csv_a2_file}")
+    print(f"  - {csv_a3_file}")
+    print(f"  - {json_file}")
     print(f"\nData processed:")
     print(f"  - Companies scraped: {len(company_details_cache)}")
     print(f"  - Holdings processed: {len(df_open)}")
