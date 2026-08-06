@@ -223,53 +223,47 @@ def main():
     json_file = os.path.join(output_dir, f"schedule_fa_{indian_fy}.json")
 
     with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
-        # Write Capital Gains sheet (dual-regime)
-        # Row 1: NEW TAX REGIME header
-        regime_header_new = pd.DataFrame([['NEW TAX REGIME - Capital Gains Calculation']])
-        regime_header_new.to_excel(writer, sheet_name="Capital Gains", index=False, header=False, startrow=0, startcol=0)
+        # SHEET ORDER (same as legacy):
+        # 1. Table A2 Custodial Acc
+        # 2. Table A3 Equity Interest
+        # 3. Capital Gains (dual-regime)
+        # 4. Schedule OS
+        # 5. Schedule FSI
 
-        # Row 2+: Sale details NEW
-        current_row = 1
-        df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
-        current_row += len(df_sale_details_new) + 1 + 3  # +1 header, +3 spacing
+        # Sheet 1 & 2: Table A2 and A3
+        df_table_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
+        df_table_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
 
-        # Advance tax NEW
+        # Sheet 3: Capital Gains (dual-regime)
+        # Write first table to create the sheet
+        df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=1, startcol=0)
+
+        # Now access the worksheet and add regime header
+        worksheet = writer.sheets["Capital Gains"]
+        worksheet.cell(row=1, column=1, value="NEW TAX REGIME - Capital Gains")
+
+        # Calculate row positions
+        current_row = 1 + len(df_sale_details_new) + 1  # header + data + spacing
+        current_row += 3  # +3 blank rows spacing
+
+        # Table 2: New Regime Advance Tax
         df_advance_tax_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
-        current_row += len(df_advance_tax_new) + 1 + 5  # +1 header, +5 spacing
+        current_row += len(df_advance_tax_new) + 6  # +1 header, +5 spacing between regimes
 
-        # OLD TAX REGIME header
-        regime_header_old = pd.DataFrame([['OLD TAX REGIME - Capital Gains Calculation']])
-        regime_header_old.to_excel(writer, sheet_name="Capital Gains", index=False, header=False, startrow=current_row, startcol=0)
-        current_row += 1
+        # OLD TAX REGIME Section
+        worksheet.cell(row=current_row+1, column=1, value="OLD TAX REGIME - Capital Gains")
+        current_row += 1  # Just move past the header
 
-        # Sale details OLD
+        # Table 3: Old Regime Sale Details
         df_sale_details_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
-        current_row += len(df_sale_details_old) + 1 + 3
+        current_row += len(df_sale_details_old) + 4  # +1 header, +3 spacing
 
-        # Advance tax OLD
+        # Table 4: Old Regime Advance Tax
         df_advance_tax_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
 
-        # Write Schedule FA sheets
-        if not df_table_a2.empty:
-            df_table_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
-        else:
-            pd.DataFrame({'Note': ['No Table A2 data']}).to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
-
-        if not df_table_a3.empty:
-            df_table_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
-        else:
-            pd.DataFrame({'Note': ['No Table A3 data']}).to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
-
-        # Write Schedule OS and FSI
-        if not df_schedule_os.empty:
-            df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
-        else:
-            pd.DataFrame({'Note': ['No Schedule OS data']}).to_excel(writer, sheet_name="Schedule OS", index=False)
-
-        if not df_schedule_fsi.empty:
-            df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
-        else:
-            pd.DataFrame({'Note': ['No Schedule FSI data']}).to_excel(writer, sheet_name="Schedule FSI", index=False)
+        # Sheet 4 & 5: Schedule OS and FSI
+        df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
+        df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
 
         # Apply professional formatting
         print("[*] Applying professional formatting...")
