@@ -189,10 +189,17 @@ class CapitalGainsGenerator:
             capital_gains_list (list): Capital gains with tax calculations
 
         Returns:
-            DataFrame: Sale details table
+            DataFrame: Sale details table (empty with columns if no sales)
         """
         if not capital_gains_list:
-            return pd.DataFrame()
+            # Return empty DataFrame with proper columns (for Excel display)
+            return pd.DataFrame(columns=[
+                'Nature', 'Quantity', 'Acquisition Date', 'Sale Date',
+                'Rule 115(1)(f) Specified Date', 'TTBR (INR/USD)',
+                'Holding Period (months)', 'Tax Type', 'Section',
+                'Cost Basis (INR)', 'Sale Proceeds (INR)', 'Capital Gain (INR)',
+                'Tax Rate', 'Tax Amount (INR)'
+            ])
 
         return pd.DataFrame([{
             'Nature': item['Nature'],
@@ -219,10 +226,14 @@ class CapitalGainsGenerator:
             capital_gains_list (list): Capital gains with tax calculations
 
         Returns:
-            DataFrame: Advance tax schedule
+            DataFrame: Advance tax schedule (empty with columns if no sales)
         """
         if not capital_gains_list:
-            return pd.DataFrame()
+            # Return empty DataFrame with proper columns
+            return pd.DataFrame(columns=[
+                'Sale Period', 'Financial Year', 'Tax Type', 'Total Tax (INR)',
+                'By Jul 15', 'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
+            ])
 
         # Group sales by period
         grouped_rows = self.tax_calculator.group_sales_by_period(capital_gains_list)
