@@ -110,6 +110,9 @@ def main():
 
             # Build price matrix with TTBR
             if not df_prices.empty:
+                # Convert Date column to datetime for merging with forex data
+                df_prices['Date'] = pd.to_datetime(df_prices['Date'])
+
                 # Merge stock prices with TTBR rates
                 df_matrix = pd.merge(
                     df_prices,
