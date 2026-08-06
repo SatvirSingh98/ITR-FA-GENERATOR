@@ -1956,11 +1956,25 @@ class ScheduleFAApp:
         json_filename = os.path.join(output_dir, f"schedule_fa_{self.indian_fy}.json")
         excel_filename = os.path.join(output_dir, f"schedule_fa_{self.indian_fy}.xlsx")
 
+        # Clean output directory BEFORE writing new files
+        import glob
+        output_pattern = os.path.join(output_dir, "schedule_fa_*")
+        for old_file in glob.glob(output_pattern):
+            try:
+                os.remove(old_file)
+                print(f"[*] Removed old file: {os.path.basename(old_file)}")
+            except Exception as e:
+                print(f"[!] Could not remove {old_file}: {e}")
+
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=2)
 
         df_a2 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignCustodialAcc"])
-        df_a3 = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
+        df_a3_raw = pd.DataFrame(output_data["ScheduleFA"]["DtlsForeignEquityDebtInterest"])
+
+        # Track if A3 is empty for later processing
+        a3_is_empty = df_a3_raw.empty
+        df_a3 = df_a3_raw
 
         # Create Peak Value Details sheet
         peak_details_data = []
@@ -1984,6 +1998,12 @@ class ScheduleFAApp:
 
         df_peak_details = pd.DataFrame(peak_details_data)
 
+        # If A3 is empty, peak details should also show note
+        if a3_is_empty or df_peak_details.empty:
+            df_peak_details = pd.DataFrame({
+                'Note': [f'No shares are vested in calendar year {self.calendar_year}']
+            })
+
         # Add USD columns to A2 (for reference like ITRFA.in)
         # Calculate USD values by dividing INR by approximate TTBR
         if not df_a2.empty and 'PeakBalanceDuringPeriod' in df_a2.columns:
@@ -1996,7 +2016,8 @@ class ScheduleFAApp:
 
         # Add USD columns to A3 (for reference like ITRFA.in)
         # Use the stored _FMV_USD values from equity_tranches
-        if not df_a3.empty:
+        # Skip if A3 is empty (will be replaced with note later)
+        if not a3_is_empty and not df_a3.empty:
             # Calculate USD values from the tranches
             usd_initial = []
             usd_peak = []
@@ -2078,7 +2099,7 @@ class ScheduleFAApp:
         if not symbols_in_portfolio:
             df_reference = pd.DataFrame({
                 'Note': ['No company data fetched',
-                         'ByStatus and G&L files were not provided']
+                         f'ByStatus and G&L files does not have data for CY {self.calendar_year}']
             })
         else:
             # Start with Date and TTBR columns from any company's matrix (TTBR is same for all)
@@ -2533,6 +2554,19 @@ class ScheduleFAApp:
             'Tax Amount (INR)': item['Tax Amount (INR)']
         } for item in capital_gains_old_regime])
 
+        # If no capital gains, show note in sale details
+        if df_sale_details_new.empty:
+            df_sale_details_new = pd.DataFrame({
+                'Note': [f'No capital gains in FY {self.indian_fy}',
+                         'All sales in G&L file are either in current FY or future years']
+            })
+
+        if df_sale_details_old.empty:
+            df_sale_details_old = pd.DataFrame({
+                'Note': [f'No capital gains in FY {self.indian_fy}',
+                         'All sales in G&L file are either in current FY or future years']
+            })
+
         # For backward compatibility, keep df_sale_details as New Regime
         df_sale_details = df_sale_details_new
 
@@ -2712,6 +2746,13 @@ class ScheduleFAApp:
                     'Note': 'Sum across all groups'
                 })
 
+            # If no sales, return empty DataFrame (note will be in sale details section only)
+            if not advance_tax_rows:
+                return pd.DataFrame(columns=[
+                    'Sale Period', 'Financial Year', 'Tax Type', 'Total Tax (INR)', 'By Jul 15',
+                    'By Sep 15', 'By Dec 15', 'By Mar 15', 'Note'
+                ])
+
             return pd.DataFrame(advance_tax_rows)
 
         # Generate advance tax schedules for BOTH regimes
@@ -2770,43 +2811,54 @@ class ScheduleFAApp:
                     else:
                         df_excluded_a3[col] = df_excluded_a3[col].round(0).astype(int)  # Round INR to integers
 
+        # If Table A3 is empty, replace with note DataFrame
+        if a3_is_empty:
+            df_a3 = pd.DataFrame({
+                'Note': [f'No shares are vested in calendar year {self.calendar_year}']
+            })
+
         with pd.ExcelWriter(excel_filename, engine="openpyxl") as writer:
             df_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
             df_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
 
-            # Write Capital Gains sheet with BOTH regimes for comparison
-            # Start with a dummy DataFrame to create the sheet, then we'll write regime headers manually
-            current_row = 0
+            # Write Capital Gains sheet
+            # If no capital gains, show a single note instead of dual regime tables
+            if df_sale_details_new.columns.tolist() == ['Note']:
+                # No capital gains - show single note
+                df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=0, startcol=0)
+            else:
+                # Has capital gains - show BOTH regimes for comparison
+                current_row = 0
 
-            # Write first table to create the sheet
-            df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=1, startcol=0)
+                # Write first table to create the sheet
+                df_sale_details_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=1, startcol=0)
 
-            # Now access the worksheet and add regime header
-            worksheet = writer.sheets["Capital Gains"]
-            worksheet.cell(row=1, column=1, value="NEW TAX REGIME - Capital Gains")
+                # Now access the worksheet and add regime header
+                worksheet = writer.sheets["Capital Gains"]
+                worksheet.cell(row=1, column=1, value="NEW TAX REGIME - Capital Gains")
 
-            # Update current_row to continue after sale details
-            current_row = 1 + len(df_sale_details_new) + 1  # header + data + spacing
-            current_row += 3  # +3 blank rows spacing
+                # Update current_row to continue after sale details
+                current_row = 1 + len(df_sale_details_new) + 1  # header + data + spacing
+                current_row += 3  # +3 blank rows spacing
 
-            # Table 2: New Regime Advance Tax
-            df_advance_tax_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
-            current_row += len(df_advance_tax_new) + 6  # +1 header, +5 spacing between regimes
+                # Table 2: New Regime Advance Tax
+                df_advance_tax_new.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+                current_row += len(df_advance_tax_new) + 6  # +1 header, +5 spacing between regimes
 
-            # OLD TAX REGIME Section
-            # Add header row (directly at current_row+1, no extra blank row)
-            worksheet.cell(row=current_row+1, column=1, value="OLD TAX REGIME - Capital Gains")
-            current_row += 1  # Just move past the header (no blank row)
+                # OLD TAX REGIME Section
+                # Add header row (directly at current_row+1, no extra blank row)
+                worksheet.cell(row=current_row+1, column=1, value="OLD TAX REGIME - Capital Gains")
+                current_row += 1  # Just move past the header (no blank row)
 
-            # Table 3: Old Regime Sale Details
-            df_sale_details_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
-            current_row += len(df_sale_details_old) + 4  # +1 header, +3 spacing
+                # Table 3: Old Regime Sale Details
+                df_sale_details_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+                current_row += len(df_sale_details_old) + 4  # +1 header, +3 spacing
 
-            # Table 4: Old Regime Advance Tax
-            df_advance_tax_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
+                # Table 4: Old Regime Advance Tax
+                df_advance_tax_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
 
-            # For backward compatibility with formatting code
-            start_row_table2 = len(df_sale_details_new) + 4
+                # For backward compatibility with formatting code
+                start_row_table2 = len(df_sale_details_new) + 4
 
             # Insert Schedule OS and FSI after Capital Gains
             df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
@@ -2850,125 +2902,144 @@ class ScheduleFAApp:
 
                 # Special formatting for Capital Gains sheet with dual regimes
                 if sheet_name == "Capital Gains":
-                    # Colors for Capital Gains dual-regime layout
-                    regime_header_fill = PatternFill(start_color="0277BD", end_color="0277BD", fill_type="solid")  # Blue (regime headers)
-                    regime_header_font = Font(bold=True, color="FFFFFF", size=12)
-                    advance_tax_header_fill = PatternFill(start_color="455A64", end_color="455A64", fill_type="solid")  # Dark gray (advance tax headers)
-                    advance_tax_header_font = Font(bold=True, color="FFFFFF", size=11)
-                    no_border = Border()  # Empty border (no lines)
+                    # Check if this is a note-only sheet (no capital gains)
+                    has_capital_gains = df_sale_details_new.columns.tolist() != ['Note']
 
-                    # Row 1: NEW TAX REGIME header (blue, centered, NO borders)
-                    for cell in ws[1]:
-                        cell.fill = regime_header_fill
-                        cell.font = regime_header_font
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                        cell.border = no_border
+                    if has_capital_gains:
+                        # Colors for Capital Gains dual-regime layout
+                        regime_header_fill = PatternFill(start_color="0277BD", end_color="0277BD", fill_type="solid")  # Blue (regime headers)
+                        regime_header_font = Font(bold=True, color="FFFFFF", size=12)
+                        advance_tax_header_fill = PatternFill(start_color="455A64", end_color="455A64", fill_type="solid")  # Dark gray (advance tax headers)
+                        advance_tax_header_font = Font(bold=True, color="FFFFFF", size=11)
+                        no_border = Border()  # Empty border (no lines)
 
-                    # Row 2: Sale details header (teal)
-                    for cell in ws[2]:
-                        cell.fill = header_fill
-                        cell.font = header_font
-                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                        cell.border = border_thin
-
-                    # Calculate row numbers (they shifted after removing blank rows)
-                    # Old: row 11, New: row 2 + len(sale_details) + 1 = approximately row 10
-                    advance_tax_row_new = 2 + len(df_sale_details_new) + 1 + 3  # +3 for spacing
-                    regime2_header_row = advance_tax_row_new + len(df_advance_tax_new) + 1 + 5  # +5 for spacing
-                    sale_details_row_old = regime2_header_row + 1
-                    advance_tax_row_old = sale_details_row_old + len(df_sale_details_old) + 1 + 3
-
-                    # Advance tax header NEW - dark gray ONLY for columns with content (A-I), J-N no color/border
-                    for cell in ws[advance_tax_row_new]:
-                        if cell.value is not None and str(cell.value).strip() != '':
-                            cell.fill = advance_tax_header_fill
-                            cell.font = advance_tax_header_font
-                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                            cell.border = border_thin
-                        else:
-                            # Empty columns - no color, no border
+                        # Row 1: NEW TAX REGIME header (blue, centered, NO borders)
+                        for cell in ws[1]:
+                            cell.fill = regime_header_fill
+                            cell.font = regime_header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
                             cell.border = no_border
 
-                    # OLD TAX REGIME header (blue, centered, NO borders)
-                    for cell in ws[regime2_header_row]:
-                        cell.fill = regime_header_fill
-                        cell.font = regime_header_font
-                        cell.alignment = Alignment(horizontal='center', vertical='center')
-                        cell.border = no_border
-
-                    # Sale details header OLD (teal)
-                    for cell in ws[sale_details_row_old]:
-                        cell.fill = header_fill
-                        cell.font = header_font
-                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                        cell.border = border_thin
-
-                    # Advance tax header OLD - dark gray ONLY for columns with content (A-I), J-N no color/border
-                    for cell in ws[advance_tax_row_old]:
-                        if cell.value is not None and str(cell.value).strip() != '':
-                            cell.fill = advance_tax_header_fill
-                            cell.font = advance_tax_header_font
+                        # Row 2: Sale details header (teal)
+                        for cell in ws[2]:
+                            cell.fill = header_fill
+                            cell.font = header_font
                             cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                             cell.border = border_thin
-                        else:
-                            # Empty columns - no color, no border
-                            cell.border = no_border
 
-                    # Format all data rows
-                    header_rows = {1, 2, advance_tax_row_new, regime2_header_row, sale_details_row_old, advance_tax_row_old}
+                        # Calculate row numbers (they shifted after removing blank rows)
+                        # Old: row 11, New: row 2 + len(sale_details) + 1 = approximately row 10
+                        advance_tax_row_new = 2 + len(df_sale_details_new) + 1 + 3  # +3 for spacing
+                        regime2_header_row = advance_tax_row_new + len(df_advance_tax_new) + 1 + 5  # +5 for spacing
+                        sale_details_row_old = regime2_header_row + 1
+                        advance_tax_row_old = sale_details_row_old + len(df_sale_details_old) + 1 + 3
 
-                    # Calculate row ranges for different sections
-                    sale_details_rows_new = set(range(3, 2 + len(df_sale_details_new) + 1))  # Rows after header 2
-                    advance_tax_data_rows_new = set(range(advance_tax_row_new + 1, advance_tax_row_new + len(df_advance_tax_new) + 1))
-                    sale_details_rows_old = set(range(sale_details_row_old + 1, sale_details_row_old + len(df_sale_details_old) + 1))
-                    advance_tax_data_rows_old = set(range(advance_tax_row_old + 1, advance_tax_row_old + len(df_advance_tax_old) + 1))
-
-                    all_advance_tax_data_rows = advance_tax_data_rows_new | advance_tax_data_rows_old
-                    all_sale_details_rows = sale_details_rows_new | sale_details_rows_old
-
-                    # Professional color scheme for sale details
-                    light_blue_fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")  # Very light blue
-                    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # White
-
-                    for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
-                        is_blank_row = all(cell.value is None or str(cell.value).strip() == '' for cell in row)
-
-                        # Skip formatting for headers (already done above)
-                        if row_idx in header_rows:
-                            continue
-
-                        # Determine if this is an odd or even sale details row (for alternating colors)
-                        if row_idx in sale_details_rows_new:
-                            row_position = row_idx - 3  # Position within sale details (0-indexed)
-                        elif row_idx in sale_details_rows_old:
-                            row_position = row_idx - (sale_details_row_old + 1)
-                        else:
-                            row_position = None
-
-                        # Apply borders and center alignment
-                        for cell in row:
-                            if is_blank_row:
-                                # Blank separator rows - no borders
-                                cell.alignment = Alignment(horizontal='center', vertical='center')
-                            elif row_idx in all_advance_tax_data_rows:
-                                # Advance tax data rows - border only for cells with content
-                                if cell.value is not None and str(cell.value).strip() != '':
-                                    cell.border = border_thin
-                                else:
-                                    cell.border = no_border
-                                cell.alignment = Alignment(horizontal='center', vertical='center')
-                            elif row_idx in all_sale_details_rows:
-                                # Sale details rows - alternating colors (light blue / white)
-                                if row_position is not None and row_position % 2 == 0:
-                                    cell.fill = white_fill
-                                else:
-                                    cell.fill = light_blue_fill
+                        # Advance tax header NEW - dark gray ONLY for columns with content (A-I), J-N no color/border
+                        for cell in ws[advance_tax_row_new]:
+                            if cell.value is not None and str(cell.value).strip() != '':
+                                cell.fill = advance_tax_header_fill
+                                cell.font = advance_tax_header_font
+                                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                                 cell.border = border_thin
-                                cell.alignment = Alignment(horizontal='center', vertical='center')
                             else:
-                                # Other regular data rows
+                                # Empty columns - no color, no border
+                                cell.border = no_border
+
+                        # OLD TAX REGIME header (blue, centered, NO borders)
+                        for cell in ws[regime2_header_row]:
+                            cell.fill = regime_header_fill
+                            cell.font = regime_header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+                            cell.border = no_border
+
+                        # Sale details header OLD (teal)
+                        for cell in ws[sale_details_row_old]:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            cell.border = border_thin
+
+                        # Advance tax header OLD - dark gray ONLY for columns with content (A-I), J-N no color/border
+                        for cell in ws[advance_tax_row_old]:
+                            if cell.value is not None and str(cell.value).strip() != '':
+                                cell.fill = advance_tax_header_fill
+                                cell.font = advance_tax_header_font
+                                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                                 cell.border = border_thin
-                                cell.alignment = Alignment(horizontal='center', vertical='center')
+                            else:
+                                # Empty columns - no color, no border
+                                cell.border = no_border
+
+                        # Format all data rows
+                        header_rows = {1, 2, advance_tax_row_new, regime2_header_row, sale_details_row_old, advance_tax_row_old}
+
+                        # Calculate row ranges for different sections
+                        sale_details_rows_new = set(range(3, 2 + len(df_sale_details_new) + 1))  # Rows after header 2
+                        advance_tax_data_rows_new = set(range(advance_tax_row_new + 1, advance_tax_row_new + len(df_advance_tax_new) + 1))
+                        sale_details_rows_old = set(range(sale_details_row_old + 1, sale_details_row_old + len(df_sale_details_old) + 1))
+                        advance_tax_data_rows_old = set(range(advance_tax_row_old + 1, advance_tax_row_old + len(df_advance_tax_old) + 1))
+
+                        all_advance_tax_data_rows = advance_tax_data_rows_new | advance_tax_data_rows_old
+                        all_sale_details_rows = sale_details_rows_new | sale_details_rows_old
+
+                        # Professional color scheme for sale details
+                        light_blue_fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")  # Very light blue
+                        white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")  # White
+
+                        for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
+                            is_blank_row = all(cell.value is None or str(cell.value).strip() == '' for cell in row)
+
+                            # Skip formatting for headers (already done above)
+                            if row_idx in header_rows:
+                                continue
+
+                            # Determine if this is an odd or even sale details row (for alternating colors)
+                            if row_idx in sale_details_rows_new:
+                                row_position = row_idx - 3  # Position within sale details (0-indexed)
+                            elif row_idx in sale_details_rows_old:
+                                row_position = row_idx - (sale_details_row_old + 1)
+                            else:
+                                row_position = None
+
+                            # Apply borders and center alignment
+                            for cell in row:
+                                if is_blank_row:
+                                    # Blank separator rows - no borders
+                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                                elif row_idx in all_advance_tax_data_rows:
+                                    # Advance tax data rows - border only for cells with content
+                                    if cell.value is not None and str(cell.value).strip() != '':
+                                        cell.border = border_thin
+                                    else:
+                                        cell.border = no_border
+                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                                elif row_idx in all_sale_details_rows:
+                                    # Sale details rows - alternating colors (light blue / white)
+                                    if row_position is not None and row_position % 2 == 0:
+                                        cell.fill = white_fill
+                                    else:
+                                        cell.fill = light_blue_fill
+                                    cell.border = border_thin
+                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                                else:
+                                    # Other regular data rows
+                                    cell.border = border_thin
+                                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    else:
+                        # No capital gains - format the Note sheet like Table A3
+                        # Row 1: Note header (teal)
+                        for cell in ws[1]:
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            cell.border = border_thin
+
+                        # Row 2+: Note content (white background)
+                        for row_idx in range(2, ws.max_row + 1):
+                            for cell in ws[row_idx]:
+                                if cell.value is not None:
+                                    cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                                    cell.border = border_thin
                 else:
                     # Standard formatting for other sheets
                     # Format header row
@@ -3144,8 +3215,8 @@ class ScheduleFAApp:
                     for col_idx in range(3, ws.max_column + 1):
                         ws.column_dimensions[get_column_letter(col_idx)].width = 18
 
-                # Special formatting for Capital Gains sheet
-                if sheet_name == "Capital Gains":
+                # Special formatting for Capital Gains sheet (only when has capital gains)
+                if sheet_name == "Capital Gains" and df_sale_details_new.columns.tolist() != ['Note']:
                     # Table 2 header and data (bold + colored)
                     table2_header_row = start_row_table2 + 1
                     table2_first_data_row = start_row_table2 + 2
@@ -3177,12 +3248,20 @@ class ScheduleFAApp:
                                 elif isinstance(cell.value, (int, float)) and cell.value == 0:
                                     cell.number_format = '"Rs."#,##0'  # Show 0 as Rs.0
 
-                # Freeze first row
-                ws.freeze_panes = ws['A2']
+                # Freeze first row (except Capital Gains sheet)
+                if sheet_name != 'Capital Gains':
+                    ws.freeze_panes = ws['A2']
 
             # Auto-adjust column widths for all sheets
             for sheet_name in writer.sheets:
                 worksheet = writer.sheets[sheet_name]
+
+                # Special handling for Capital Gains note-only sheet
+                if sheet_name == "Capital Gains" and df_sale_details_new.columns.tolist() == ['Note']:
+                    # Set a wide column for the note text to wrap properly
+                    worksheet.column_dimensions['A'].width = 80
+                    continue
+
                 for column in worksheet.columns:
                     max_length = 0
                     column_letter = column[0].column_letter
