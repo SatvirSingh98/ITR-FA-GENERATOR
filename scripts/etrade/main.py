@@ -13,14 +13,17 @@ import argparse
 import pandas as pd
 
 # Add parent directory to path to import scripts
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from scripts.config_manager import ConfigManager
-from scripts.forex_manager import ForexManager
-from scripts.tax_calculator import TaxCalculator
-from scripts.etrade_parser import ETradeParser
-from scripts.capital_gains_generator import CapitalGainsGenerator
-from scripts.excel_formatter import ExcelFormatter
+from scripts.etrade.config_manager import ConfigManager
+from scripts.etrade.forex_manager import ForexManager
+from scripts.etrade.tax_calculator import TaxCalculator
+from scripts.etrade.etrade_parser import ETradeParser
+from scripts.etrade.capital_gains_generator import CapitalGainsGenerator
+from scripts.etrade.excel_formatter import ExcelFormatter
+from scripts.etrade.schedule_fa_generator import ScheduleFAGenerator
+from scripts.etrade.schedule_os_fsi_generator import ScheduleOSFSIGenerator
+from scripts.etrade.yahoo_scraper import YahooFinanceScraper
 
 
 def main():
@@ -109,14 +112,42 @@ def main():
     print(f"[OK] Old Regime Total Tax: INR {sum(item['Tax Amount (INR)'] for item in capital_gains_old):,}" if capital_gains_old else "[OK] No capital gains")
 
     # Step 6: Generate Schedule FA (Table A2, A3)
-    # TODO: This needs schedule_fa_generator module (not yet created)
     print("\n[6/8] Generating Schedule FA...")
-    print("[!] Schedule FA generation - using legacy code (TODO: refactor)")
+    fa_generator = ScheduleFAGenerator(forex_manager, config_manager, calendar_year=calendar_year)
+
+    # Read ClientStatement for closing balance
+    account_number, closing_balance_usd = fa_generator.read_client_statement()
+
+    # Generate Table A2 (Custodial Account Summary)
+    df_table_a2 = fa_generator.generate_table_a2(
+        df_dividends=df_dividends,
+        df_sold_calendar=df_sold_calendar,
+        client_statement_closing_usd=closing_balance_usd
+    )
+
+    # Generate Table A3 (Equity Interest Holdings) - simplified Phase 2A
+    # Full implementation with peak calculations deferred to Phase 2B
+    df_table_a3 = fa_generator.generate_table_a3(
+        df_open=df_open,
+        df_sold_calendar=df_sold_calendar,
+        company_details_cache={}  # TODO Phase 2B: populate with scraped company details
+    )
 
     # Step 7: Generate Schedule OS and FSI
-    # TODO: This needs schedule_os_fsi_generator module (not yet created)
     print("\n[7/8] Generating Schedule OS and FSI...")
-    print("[!] Schedule OS/FSI generation - using legacy code (TODO: refactor)")
+    os_fsi_generator = ScheduleOSFSIGenerator(forex_manager, calendar_year=calendar_year)
+
+    # Calculate Schedule OS (Other Sources - Dividend Income)
+    df_schedule_os, df_div_os = os_fsi_generator.calculate_schedule_os(df_dividends)
+
+    # Calculate Schedule FSI (Foreign Source Income)
+    # Convert capital gains to required format for FSI
+    if capital_gains_new:
+        df_cg_for_fsi = pd.DataFrame(capital_gains_new)
+    else:
+        df_cg_for_fsi = pd.DataFrame()
+
+    df_schedule_fsi = os_fsi_generator.calculate_schedule_fsi(df_dividends, df_cg_for_fsi)
 
     # Step 8: Write Excel output with professional formatting
     print("\n[8/8] Writing Excel output...")
@@ -149,11 +180,27 @@ def main():
         # Advance tax OLD
         df_advance_tax_old.to_excel(writer, sheet_name="Capital Gains", index=False, startrow=current_row, startcol=0)
 
-        # TODO: Add other sheets (Schedule FA, OS, FSI, etc.)
-        # For now, write placeholder sheets
-        pd.DataFrame({'Note': ['Schedule FA - TODO (using legacy code)']}).to_excel(writer, sheet_name="Table A2", index=False)
-        pd.DataFrame({'Note': ['Schedule OS - TODO (using legacy code)']}).to_excel(writer, sheet_name="Schedule OS", index=False)
-        pd.DataFrame({'Note': ['Schedule FSI - TODO (using legacy code)']}).to_excel(writer, sheet_name="Schedule FSI", index=False)
+        # Write Schedule FA sheets
+        if not df_table_a2.empty:
+            df_table_a2.to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
+        else:
+            pd.DataFrame({'Note': ['No Table A2 data']}).to_excel(writer, sheet_name="Table A2 Custodial Acc", index=False)
+
+        if not df_table_a3.empty:
+            df_table_a3.to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
+        else:
+            pd.DataFrame({'Note': ['Table A3 - Phase 2B (Full peak/dividend logic pending)']}).to_excel(writer, sheet_name="Table A3 Equity Interest", index=False)
+
+        # Write Schedule OS and FSI
+        if not df_schedule_os.empty:
+            df_schedule_os.to_excel(writer, sheet_name="Schedule OS", index=False)
+        else:
+            pd.DataFrame({'Note': ['No Schedule OS data']}).to_excel(writer, sheet_name="Schedule OS", index=False)
+
+        if not df_schedule_fsi.empty:
+            df_schedule_fsi.to_excel(writer, sheet_name="Schedule FSI", index=False)
+        else:
+            pd.DataFrame({'Note': ['No Schedule FSI data']}).to_excel(writer, sheet_name="Schedule FSI", index=False)
 
         # Apply professional formatting
         print("[*] Applying professional formatting...")
@@ -175,8 +222,9 @@ def main():
     print("=" * 80)
     print(f"\nGenerated files:")
     print(f"  - {output_file}")
-    print("\nNOTE: This is Phase 1 of refactoring. Some features use legacy code.")
-    print("      Schedule FA, OS, FSI generation will be refactored in Phase 2.")
+    print("\nNOTE: Phase 2A - Modular architecture with simplified Schedule FA.")
+    print("      Table A3 peak/dividend calculations deferred to Phase 2B.")
+    print("      Capital Gains (dual-regime), Schedule OS, Schedule FSI fully working!")
 
 
 if __name__ == "__main__":
