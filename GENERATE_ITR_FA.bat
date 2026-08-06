@@ -258,8 +258,8 @@ if "%FILE_STATUS:~1,1%"=="1" (
 )
 
 echo [*] Starting Schedule FA generation...
-echo [i] Using modular architecture (scripts/main.py)
-venv\Scripts\python.exe scripts/main.py --income-bracket %INCOME_CHOICE% --calendar-year 2025 > output_summary.txt 2>&1
+echo [i] Using modular architecture (scripts/etrade/main.py)
+venv\Scripts\python.exe scripts/etrade/main.py --income-bracket %INCOME_CHOICE% --calendar-year 2025 > output_summary.txt 2>&1
 
 if errorlevel 1 (
     echo.
