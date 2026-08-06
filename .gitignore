@@ -8,6 +8,9 @@ etrade_outputs/*.xlsx
 etrade_outputs/*.csv
 output_summary.txt
 
+# Generated ITR output files (contain personal financial data)
+ITR_FA_ETRADE_*.xlsx
+
 #exclude your config.json
 config.json
 
