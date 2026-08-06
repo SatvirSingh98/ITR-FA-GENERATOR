@@ -41,6 +41,11 @@ desktop.ini
 ~$*.xls
 .claude
 
+# Documentation - work-in-progress notes (not for repo)
+PHASE_2_STATUS.md
+PHASE_2A_COMPLETE.md
+QUICK_WINS_COMPLETE.md
+
 # Test files (exclude)
 SBI_FOREX_CARD_RATES_USD.csv
 
