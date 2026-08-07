@@ -162,7 +162,7 @@ The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
 
 ## Troubleshooting
 
-**Problem:** "Python not found" error when running GENERATE_ITR_FA.bat
+**Problem:** "Python not found" error when running GENERATE_ITR_FA_ETRADE.bat
 - **Solution:** Install Python 3.11+ from [python.org](https://python.org/downloads/) and check "Add Python to PATH" during installation
 
 **Problem:** Warning about G&L_Expanded.xlsx missing

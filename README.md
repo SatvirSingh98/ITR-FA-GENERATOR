@@ -20,7 +20,7 @@ Place these files in `etrade_inputs/` folder:
 - `Transaction_History.csv` (optional - only if you received dividends)
 
 ### Step 2: Run
-Double-click: **`GENERATE_ITR_FA.bat`**
+Double-click: **`GENERATE_ITR_FA_ETRADE.bat`**
 
 **First run:** Auto-creates venv, installs packages, generates files (~3-5 minutes)  
 **Next runs:** Just generates files (~1-2 minutes)
@@ -285,7 +285,7 @@ Advance tax payment schedule (based on sale date):
 
 ## BAT Files
 
-**`GENERATE_ITR_FA.bat`** - All-in-one runner (zero-config setup)
+**`GENERATE_ITR_FA_ETRADE.bat`** - All-in-one runner (zero-config setup)
 - **First run:** Auto-creates venv + installs packages + generates output
 - **Next runs:** Just generates output
 - Auto-validates Python version (requires 3.11+)
