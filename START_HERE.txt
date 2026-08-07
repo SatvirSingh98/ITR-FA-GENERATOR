@@ -15,10 +15,11 @@ QUICK START - 3 STEPS:
    - Export from E*TRADE:
      • ByStatus_expanded.xlsx
      • G&L_Expanded.xlsx
+     • ClientStatement.pdf (Dec 31 of calendar year)
    - Place in: etrade_inputs/ folder
 
 3. RUN:
-   - Double-click: GENERATE_ITR_FA.bat
+   - Double-click: GENERATE_ITR_FA_ETRADE.bat
    - Script auto-checks everything first
    - Wait ~1-2 minutes
    - Check etrade_outputs/ folder
