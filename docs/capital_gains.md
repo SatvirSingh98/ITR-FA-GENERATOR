@@ -288,14 +288,27 @@ From `G&L_Expanded.xlsx` (E*TRADE Gain & Loss report):
 >
 > — ITRFA.in Official Guidance (2026-08-03)
 
-**Why This Matters:**
+**Legal Basis - IT Act Circulars 768 and 704:**
+
+**Circular 768:** States that FIFO applies for securities traded through recognized stock exchanges.
+
+**Circular 704 (Critical Clarification):**
+> **"The First-in-first-out (FIFO) method shall be adopted to reckon the period of the holding of the security, in cases where the dates of purchase and sale could not be correlated through specific numbers of the scrips"**
+
+**Key Interpretation:**
+- FIFO is **mandatory ONLY when** you cannot correlate dates of purchase and sale through specific scrip numbers
+- **Foreign brokerage statements (E*TRADE) DO provide specific lot identification** with exact purchase dates
+- Therefore, FIFO is **NOT mandatory** - actual lot matching can be used
+
+**Additional Support:**
 
 From the article [Lot matching vs. FIFO: why it changes your capital gains (July 2026)](https://ethro.com):
 
 > **"Section 45(2A) of the Income-tax Act mandates FIFO — but only for securities held in dematerialised form through an Indian depository (NSDL/CDSL). A foreign brokerage account is not that."**
 
 **Key Points:**
-- ✅ **FIFO is NOT mandatory** for foreign brokerage accounts (E*TRADE)
+- ✅ **FIFO is NOT mandatory** when specific lot identification is available (Circular 704)
+- ✅ **E*TRADE provides specific lot correlation** via Gains & Losses report
 - ✅ **E*TRADE's matching is authoritative** - we report what actually happened
 - ✅ **Handles RSU sell-to-cover correctly** - avoids phantom gains from forced FIFO
 
