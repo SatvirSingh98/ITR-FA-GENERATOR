@@ -7,44 +7,62 @@ The **Capital Gains** sheet calculates tax liability on stock sales, categorized
 
 ---
 
-## Capital Gains Excel Sheet - Dual-Regime Comparison
+## Capital Gains Excel Sheet
 
 ### Sheet Structure
 
-The Capital Gains sheet displays **TWO complete sections** for regime comparison:
+The Capital Gains sheet displays sale details and advance tax schedule in a **compact vertical format**.
 
+#### Single Regime (Same Tax Rate for NEW and OLD)
 ```
-Row 1:  [BLUE HEADER] NEW TAX REGIME - Capital Gains
-Row 2:  [TEAL HEADERS] Nature | Quantity | Acquisition Date | Sale Date | ...
-Rows 3-N: Sale details (alternating white/light blue rows)
-Row N+1: [DARK GRAY HEADERS] Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | ...
-Rows N+2-M: Advance tax schedule
+Row 1:  [TEAL HEADERS] Nature | Quantity | Acquisition Date | Sale Date | Tax Rate | Tax Amount (INR) | ...
+Rows 2-N: Sale details (alternating white/light blue rows)
 (Blank separator rows)
-Row M+1: [BLUE HEADER] OLD TAX REGIME - Capital Gains
-Row M+2: [TEAL HEADERS] Nature | Quantity | Acquisition Date | Sale Date | ...
-Rows M+3-P: Sale details (alternating white/light blue rows)
-Row P+1: [DARK GRAY HEADERS] Sale Period | Financial Year | Total Tax (INR) | By Jul 15 | ...
-Rows P+2-Q: Advance tax schedule
+Row N+4: [TEAL HEADER - MERGED A:B] Advance Tax Schedule
+Row N+5: Sale Period          | Apr 1 - Jul 15, 2026
+Row N+6: Tax Type             | Advance Tax
+Row N+7: Total Tax (INR)      | Rs.XX,XXX
+Row N+8: By Jul 15            | Rs.XX,XXX
+Row N+9: By Sep 15            | Rs.XX,XXX
+Row N+10: By Dec 15           | Rs.XX,XXX
+Row N+11: By Mar 15           | Rs.XX,XXX
+Row N+12: Note                | All 4 deadlines apply
+```
+
+#### Dual Regime (Different Tax Rates for NEW and OLD)
+```
+Row 1:  [TEAL HEADERS] Nature | Quantity | ... | Tax Rate (New) | Tax Amount (New) INR | Tax Rate (Old) | Tax Amount (Old) INR
+Rows 2-N: Sale details (alternating white/light blue rows)
+(Blank separator rows)
+Row N+4: [BLUE MERGED A:B] NEW TAX REGIME | [RED MERGED E:F] OLD TAX REGIME
+Columns A-B (NEW):              Columns E-F (OLD):
+Row N+5: Sale Period            | Sale Period
+Row N+6: Tax Type               | Tax Type
+Row N+7: Total Tax (INR)        | Total Tax (INR)
+Row N+8: By Jul 15              | By Jul 15
+Row N+9: By Sep 15              | By Sep 15
+Row N+10: By Dec 15             | By Dec 15
+Row N+11: By Mar 15             | By Mar 15
+Row N+12: Note                  | Note
 ```
 
 ### Professional Color Scheme
 
 **Headers:**
-- **Blue (#0277BD):** Regime section headers (NEW/OLD TAX REGIME)
-- **Teal (#00695C):** Sale details column headers
-- **Dark Gray (#455A64):** Advance tax column headers
+- **Teal (#00695C):** Sale details headers and single regime advance tax header
+- **Dark Blue (#01579B):** NEW TAX REGIME label (dual regime)
+- **Dark Red (#BF360C):** OLD TAX REGIME label (dual regime)
 
 **Data Rows:**
 - **Sale Details:** Alternating white (#FFFFFF) and light blue (#E3F2FD)
-- **Advance Tax:** White background
+- **Advance Tax:** White background (#FFFFFF) with black text (#000000)
 - **Separators:** Clean white space with NO borders
 
-**Border Rules:**
-- Regime headers: NO borders (clean banner look)
-- Sale details: All columns have borders
-- Advance tax headers: Borders only for columns A-I (data columns), J-N no borders
-- Advance tax data: Borders only for non-empty cells (columns A-I)
-- Separator rows: NO borders
+**Layout Features:**
+- Regime headers: Merged cells (A:B for single/NEW, E:F for OLD), centered, NO borders
+- Advance tax: Vertical format (Field | Value) for easy reading
+- Side-by-side comparison: NEW regime in columns A-B, OLD regime in columns E-F
+- Columns C-D: Empty separator (no borders, no data)
 
 ### Example Tax Comparison
 
@@ -405,9 +423,31 @@ Savings with New Regime: ₹132
 ### Overview
 This section covers advance tax payment deadlines (Rule 234C) and related penalty provisions to help you avoid interest charges and fees.
 
-### Advance Tax Schedule (Rule 234C)
+### Advance Tax Schedule (Rule 234C) - Vertical Format
 
 **Purpose:** Show when to pay advance tax for capital gains based on sale date.
+
+The Excel sheet displays advance tax in **vertical format** for easy reading:
+
+**Example Output (Vertical Layout):**
+```
+Field                | Value
+---------------------|----------------------
+Sale Period          | Apr 1 - Jul 15, 2026
+Tax Type             | Advance Tax
+Total Tax (INR)      | Rs.1,40,654
+By Jul 15            | Rs.21,100
+By Sep 15            | Rs.63,296
+By Dec 15            | Rs.1,05,492
+By Mar 15            | Rs.1,40,654
+Note                 | All 4 deadlines apply
+```
+
+**Dual Regime Comparison:**
+When tax rates differ between NEW and OLD regimes, both schedules appear **side-by-side**:
+- Columns A-B: NEW TAX REGIME schedule
+- Columns E-F: OLD TAX REGIME schedule
+- Columns C-D: Empty separator for readability
 
 ### Payment Deadlines (within the Financial Year)
 
