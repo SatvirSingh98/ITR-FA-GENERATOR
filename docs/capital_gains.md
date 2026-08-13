@@ -48,17 +48,17 @@ Rows P+2-Q: Advance tax schedule
 
 ### Example Tax Comparison
 
-**Income Bracket: ₹16-20 lakhs**
+**Income Bracket: ₹16-20 lakhs (illustrative example)**
 
 | Sale | Quantity | Capital Gain | New Regime Tax (20.8%) | Old Regime Tax (31.2%) | Savings |
 |------|----------|--------------|------------------------|------------------------|---------|
-| Stock | 26 shares | ₹2,31,888 | ₹48,233 | ₹72,350 | ₹24,117 |
-| Stock | 5 shares | ₹66,513 | ₹13,835 | ₹20,753 | ₹6,918 |
-| ESPP | 1 share | ₹16,784 | ₹3,492 | ₹5,237 | ₹1,745 |
-| ESPP | 5 shares | ₹1,35,619 | ₹28,209 | ₹42,314 | ₹14,105 |
-| **TOTAL** | - | **₹4,50,804** | **₹93,769** | **₹1,40,654** | **₹46,885** |
+| Stock | 30 shares | ₹2,50,000 | ₹52,000 | ₹78,000 | ₹26,000 |
+| Stock | 10 shares | ₹80,000 | ₹16,640 | ₹24,960 | ₹8,320 |
+| ESPP | 5 shares | ₹40,000 | ₹8,320 | ₹12,480 | ₹4,160 |
+| ESPP | 8 shares | ₹1,20,000 | ₹24,960 | ₹37,440 | ₹12,480 |
+| **TOTAL** | - | **₹4,90,000** | **₹1,01,920** | **₹1,52,880** | **₹50,960** |
 
-**Tax Savings with New Regime:** ₹46,885 (33% less tax)
+**Tax Savings with New Regime:** ₹50,960 (33% less tax)
 
 ---
 
@@ -304,7 +304,7 @@ Sale proceeds: $264.50 × 5 = $1,322.50
 Capital gain: $0.85 (minimal gain - reflects reality)
 ```
 
-**Impact:** FIFO would create a ₹49,000 phantom gain on a ₹72 actual gain!
+**Impact:** FIFO would create a ₹58,000 phantom gain on a ₹100 actual gain!
 
 **What We Do:**
 - Read `OpenDate`, `Quantity`, `OpenPrice USD` from G&L report
@@ -324,10 +324,10 @@ Capital gain: $0.85 (minimal gain - reflects reality)
 ```
 Sale Date: Aug 15, 2025
 Specified Date: Jul 31, 2025 (last day of previous month)
-TTBR: 83.50 INR/USD (from SBI data)
+TTBR: 84.50 INR/USD (from SBI data)
 
-Sale Proceeds: $1,322.50 × 83.50 = ₹1,10,429
-Cost Basis: $1,321.65 × 83.50 = ₹1,10,358
+Sale Proceeds: $1,500.00 × 84.50 = ₹1,26,750
+Cost Basis: $1,485.00 × 84.50 = ₹1,25,483
 ```
 
 
@@ -339,9 +339,9 @@ capital_gain_inr = sale_proceeds_inr - cost_basis_inr
 
 **Example:**
 ```
-Sale Proceeds: ₹1,10,429
-Cost Basis: ₹1,10,358
-Capital Gain: ₹71
+Sale Proceeds: ₹1,26,750
+Cost Basis: ₹1,25,483
+Capital Gain: ₹1,267
 ```
 
 ### Step 5: Classify as LTCG or STCG
@@ -389,21 +389,25 @@ tax = math.ceil(capital_gain * 0.125)  # 12.5% for both regimes
 
 **Example (STCG, Income ₹16L-20L):**
 ```
-Capital Gain: ₹71
+Capital Gain: ₹1,267
 
-New Regime Tax: ceil(₹71 × 20.8%) = ceil(₹14.768) = ₹15
-Old Regime Tax: ceil(₹71 × 31.2%) = ceil(₹22.152) = ₹23
+New Regime Tax: ceil(₹1,267 × 20.8%) = ceil(₹263.536) = ₹264
+Old Regime Tax: ceil(₹1,267 × 31.2%) = ceil(₹395.304) = ₹396
 
-Savings with New Regime: ₹8
+Savings with New Regime: ₹132
 ```
 
 
 ---
 
-## Advance Tax Schedule (Income Tax Rule 234C)
+## Advance Tax Schedule and Penalty Rules
 
-### Purpose
-Show when to pay advance tax for capital gains based on sale date.
+### Overview
+This section covers advance tax payment deadlines (Rule 234C) and related penalty provisions to help you avoid interest charges and fees.
+
+### Advance Tax Schedule (Rule 234C)
+
+**Purpose:** Show when to pay advance tax for capital gains based on sale date.
 
 ### Payment Deadlines (within the Financial Year)
 
@@ -476,8 +480,148 @@ Both New and Old regime calculations include separate advance tax schedules:
 
 | Regime | Total Tax | By Jul 15 (15%) | By Sep 15 (45%) | By Dec 15 (75%) | By Mar 15 (100%) |
 |--------|-----------|-----------------|-----------------|-----------------|------------------|
-| **New** | ₹93,769 | ₹14,067 | ₹42,198 | ₹70,328 | ₹93,769 |
-| **Old** | ₹1,40,654 | ₹21,098 | ₹63,294 | ₹1,05,491 | ₹1,40,654 |
+| **New** | ₹1,00,000 | ₹15,000 | ₹45,000 | ₹75,000 | ₹1,00,000 |
+| **Old** | ₹1,50,000 | ₹22,500 | ₹67,500 | ₹1,12,500 | ₹1,50,000 |
+
+### Interest and Penalty Provisions
+
+**IMPORTANT:** Missing advance tax deadlines or filing ITR late results in **automatic interest/penalties**. The Income Tax Department calculates these automatically.
+
+#### Section 234C - Interest on Deferment of Advance Tax
+
+**What:** 1% per month (or part thereof) simple interest on advance tax shortfall at each installment.
+
+**When Applied:**
+- Interest charged if advance tax paid by a deadline is less than required cumulative %
+- Calculated separately for each missed/short installment
+- Applied even if total tax is paid by Mar 31
+
+**Calculation Example:**
+```
+Total tax liability: ₹1,20,000
+Required by Sep 15: ₹54,000 (45%)
+Actually paid by Sep 15: ₹35,000
+Shortfall: ₹19,000
+
+Interest (Sep 15 to Mar 31 = 6 months): ₹19,000 × 1% × 6 = ₹1,140
+```
+
+**How to Avoid:**
+- Pay advance tax by each deadline (Jul 15, Sep 15, Dec 15, Mar 15)
+- Ensure cumulative % paid matches or exceeds required %
+- Plan liquidity for tax payments in advance
+
+**Note:** This is what the **Advance Tax Schedule** in the Capital Gains sheet helps you avoid!
+
+#### Section 234B - Interest on Shortfall in Total Advance Tax
+
+**What:** 1% per month (or part thereof) simple interest if total advance tax paid by Mar 31 is less than 90% of assessed tax.
+
+**When Applied:**
+- Calculated from Apr 1 of assessment year to date of assessment/self-assessment
+- Applied on the shortfall amount (assessed tax minus advance tax paid)
+- Common scenario: Underestimated capital gains or other income
+
+**Calculation Example:**
+```
+Total assessed tax: ₹1,50,000
+Required minimum (90%): ₹1,35,000
+Total advance tax paid by Mar 31: ₹1,00,000
+Shortfall: ₹35,000
+
+Interest (Apr 1 to Jul 31 = 4 months): ₹35,000 × 1% × 4 = ₹1,400
+```
+
+**How to Avoid:**
+- Ensure total advance tax ≥ 90% of estimated tax liability
+- Account for ALL income sources (salary + capital gains + other)
+- Use the Capital Gains sheet to accurately estimate tax
+- Pay self-assessment tax before filing ITR if advance tax was short
+
+**Difference from 234C:**
+- 234C: Interest on deferring individual installments
+- 234B: Interest on overall shortfall in advance tax
+
+#### Section 234A - Interest on Delay in Filing ITR
+
+**What:** 1% per month (or part thereof) simple interest on unpaid tax from ITR due date to actual filing date.
+
+**When Applied:**
+- ITR filed after due date (usually July 31 for individuals)
+- Interest calculated on tax due (after adjusting TDS/advance tax)
+- Continues until ITR is filed AND tax is paid
+
+**Calculation Example:**
+```
+Tax due after TDS/advance tax: ₹60,000
+ITR due date: Jul 31, 2026
+Actual filing date: Oct 15, 2026
+Delay: 2.5 months
+
+Interest: ₹60,000 × 1% × 3 = ₹1,800 (3 months, rounded up)
+```
+
+**How to Avoid:**
+- File ITR before July 31 (for individuals without audit)
+- Pay all self-assessment tax before filing
+- Use pre-filled ITR data to speed up filing
+- Keep all documents ready (Form 16, Capital Gains statement, etc.)
+
+**Due Dates:**
+- Individuals (no audit): **July 31**
+- Partnership firms/Companies (with audit): **October 31**
+- Revised ITR: **December 31**
+
+#### Section 234F - Fee for Delay in Filing ITR
+
+**What:** Late filing fee (NOT interest, it's a flat penalty).
+
+**Fee Structure:**
+| Total Income | Filing Delay | Fee |
+|--------------|--------------|-----|
+| Up to ₹5 lakhs | After Jul 31 | ₹1,000 |
+| Above ₹5 lakhs | After Jul 31 | ₹5,000 |
+| Any amount | After Dec 31 | ₹10,000* |
+
+*₹10,000 is the maximum fee (₹5,000 for delay beyond Jul 31 + ₹5,000 for delay beyond Dec 31)
+
+**When Applied:**
+- Automatically added when filing delayed ITR
+- Separate from Section 234A interest
+- Both 234A interest AND 234F fee apply together
+
+**Calculation Example:**
+```
+Income: ₹20,00,000 (above ₹5 lakhs)
+ITR due: Jul 31, 2026
+Filed on: Sep 20, 2026
+
+Fee: ₹5,000 (under 234F)
+Plus: Interest under 234A on any unpaid tax
+```
+
+**How to Avoid:**
+- File ITR by July 31, even if you need to revise later
+- If you filed on time, you can revise by December 31 with NO penalty
+- Delayed filing cannot claim refunds easily
+
+### Summary: How to Avoid All Penalties
+
+| Section | What | How to Avoid |
+|---------|------|--------------|
+| **234C** | Interest on deferred advance tax installments | Pay advance tax by each deadline (use Capital Gains sheet schedule) |
+| **234B** | Interest if total advance tax < 90% | Ensure total advance tax paid ≥ 90% of estimated tax |
+| **234A** | Interest on delayed ITR filing | File ITR by July 31 |
+| **234F** | Penalty fee for delayed ITR filing | File ITR by July 31 |
+
+**Best Practice:**
+1. Use the **Capital Gains sheet Advance Tax Schedule** to plan payments
+2. Pay advance tax on time (by each deadline shown in the sheet)
+3. Ensure total advance tax ≥ 90% of estimated tax liability
+4. File ITR by **July 31** to avoid both 234A interest and 234F penalty
+5. Keep buffer for self-assessment tax when filing
+
+**Pro Tip:** Even if you miss advance tax deadlines, **file ITR on time** (by July 31) to at least avoid 234F penalty and limit 234A interest.
 
 
 ---
