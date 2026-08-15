@@ -212,54 +212,6 @@ The **A3 Peak Value Details** sheet shows the exact peak calculation window and 
 
 ---
 
-## FIFO Handling
-
-### Question to ITRFA.in:
-"As per Indian Law FIFO is there right like if we sell any share the oldest will go first, is it the same case here also?"
-
-### ITRFA.in Answer:
-"**FIFO — we use ETRADE's own Gains & Losses export as the source of which lot was sold.** That report already reflects whichever lot-relief method ETRADE itself applied when the sale executed. **We don't re-derive or override the lot order on top of it.**"
-
-- Use E*TRADE's G&L_Expanded.xlsx acquisition dates AS-IS
-- Don't re-calculate FIFO ourselves
-- E*TRADE has already applied the correct lot-relief method
-
----
-
-## Dividend Allocation for Partial Sales
-
-### Question to ITRFA.in:
-"For dividend handling: In your example, you put the $120 dividend on Lot 2 (the lot still held on Dec 31), with Lot 1 getting $0 since it was sold. My question is what if the dividend was paid BEFORE the Lot 1 was sold?"
-
-### ITRFA.in Answer:
-"**Dividend timing — the dividend goes to whichever lot(s) were actually held of record on the date the dividend was declared/paid, not whichever lot is still open on Dec 31.** In your example, the March dividend goes entirely to Lot 1, even though Lot 1 later shows a $0 closing balance from the June sale — that's expected, not an error. **If more than one lot is held of record on a dividend's date, the amount is split across them in proportion to shares held, not assigned to one row.**"
-
-**Example:**
-```
-March 2025: Dividend $150 paid (only Lot 1 existed with 100 shares)
-June 2025: Sold all Lot 1 shares (closing balance = 0)
-Aug 2025: Lot 2 vested (50 shares)
-Dec 31: Only Lot 2 held
-
-Dividend allocation:
-- Lot 1 (SOLD): TotGrossAmtPaidCredited = ₹12,600 (entire dividend)
-                Closing Balance = ₹0
-- Lot 2 (HOLDING): TotGrossAmtPaidCredited = ₹0 (didn't exist on dividend date)
-                   Closing Balance = ₹XXX
-
-This is CORRECT! Dividend stays with the lot that held shares on payment date.
-```
-
-
----
-
-## Code Location
-**Lines:** 1244-1400 (separate row creation for open/sold/future-sold lots)
-
-**Key Sections:**
-
----
-
 ## Verification Checklist
 
 To verify correct Table A3 structure in Excel output:
