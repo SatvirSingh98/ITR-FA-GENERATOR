@@ -233,36 +233,6 @@ The tool calculates peak value using this algorithm:
 
 ---
 
-## Code Reference
-
-
-```python
-# Calculate peak value and details
-peak_idx = window['Valuation_Per_Share_INR'].idxmax()
-peak_val = round(qty * window['Valuation_Per_Share_INR'].max(), 2)
-
-peak_row = window.loc[peak_idx]
-peak_date = peak_row['Date']
-peak_price_usd = peak_row['Stock_Close_USD']
-peak_ttbr = peak_row['TTBR']
-peak_per_share_inr = peak_row['Valuation_Per_Share_INR']
-```
-
-```python
-# Create Peak Value Details sheet
-peak_details_data = []
-for tranche in equity_tranches:
-    peak_info = tranche.get('_peak_details', {})
-    peak_details_data.append({
-        'Peak Date': peak_info.get('peak_date', ''),
-        'Peak Price (USD)': round(peak_info.get('peak_price_usd', 0), 2),
-        # ... other fields
-    })
-df_peak_details = pd.DataFrame(peak_details_data)
-```
-
----
-
 ## Common Questions
 
 ### Q: Why do some lots have the same peak date?
