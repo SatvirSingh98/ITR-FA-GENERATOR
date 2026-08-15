@@ -4,7 +4,7 @@ This document explains how to set up automatic daily fetching of SBI TTBR rates 
 
 ## Overview
 
-The automation runs **daily at 9:00 PM IST** and:
+The automation runs **daily at 5:00 PM IST** and:
 1. Fetches latest USD/INR rate from SBI official PDF
 2. Merges with historical rates from GitHub backup
 3. Saves to `data/sbi_ttbr_rates.csv`
