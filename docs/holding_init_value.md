@@ -27,7 +27,7 @@ When generating Schedule FA for a target calendar year (e.g., {YEAR}):
 ### The Solution:
 The script:
 1. **Detects** all acquisition dates that fall **before** the calendar year start (Jan 1 of target year)
-2. **Downloads extra TTBR data** for those specific dates (with ±3 day buffer for weekends)
+2. **Downloads extra TTBR data** for those specific dates (preceding trading day for weekends)
 3. **Caches** this historical data alongside current-year data
 4. **Calculates** initial value using historical stock price + historical TTBR
 
