@@ -31,12 +31,14 @@ This folder contains detailed technical documentation for understanding how the 
 **What it covers:**
 - LTCG vs STCG classification (24-month rule)
 - Tax rates (12.5% vs 31.2%)
-- FIFO (First-In, First-Out) matching logic
+- E*TRADE's actual lot matching (NOT forced FIFO)
+- Legal basis: IT Act Circulars 704 and 768
 - Gross proceeds and cost basis calculation
-- Advance tax schedule (Rule 234C)
+- Advance tax schedule (Rule 234C) in vertical format
+- NEW vs OLD tax regime comparison (side-by-side)
 - Why all tax amounts are rounded UP
 
-**When to read:** When you want to understand how capital gains tax is calculated for stock sales.
+**When to read:** When you want to understand how capital gains tax is calculated for stock sales and why we use E*TRADE's lot matching instead of forcing FIFO.
 
 ---
 
@@ -79,10 +81,10 @@ Tax = Capital Gain × (12.5% for LTCG or 31.2% for STCG)
 
 ### Key Dates
 
-**Financial Year {YEAR}-26:**
-- Start: Apr 1, {FY_START_YEAR}
-- End: Mar 31, {FY_END_YEAR}
-- Assessment Year: {YEAR+1}-27
+**Financial Year 2025-26:**
+- Start: Apr 1, 2025
+- End: Mar 31, 2026
+- Assessment Year: 2026-27
 
 **Advance Tax Due Dates:**
 - Jul 15: 15% of total tax
@@ -112,15 +114,25 @@ Tax = Capital Gain × (12.5% for LTCG or 31.2% for STCG)
 
 ### Excel Output Sheets
 
-The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
+The generated `schedule_fa_2025-26.xlsx` contains:
 
-1. **Table A2 Custodial Acc** - Account summary (opening, peak, closing)
+1. **Table A2 Custodial Acc** - Account summary (opening, peak, closing balance)
 2. **Table A3 Equity Interest** - Individual holdings (all tranches)
-3. **Excluded from A3** - Audit trail (sold shares excluded)
-4. **Capital Gains** - Tax calculations for sales
-5. **Reference - Daily Rates** - Complete daily data matrix
-6. **A2 Peak Calculation** - Peak balance workings
-7. **Pre-FY Holdings Init Val** - Historical initial value calculations
+3. **Capital Gains** - Simplified sheet with vertical advance tax format
+   - Side-by-side NEW vs OLD regime comparison (when rates differ)
+   - Single regime display (when rates are same)
+   - Vertical advance tax schedule (Field | Value)
+4. **Schedule OS** - Offset schedule for foreign tax credit
+5. **Schedule FSI** - Foreign source income details
+6. **Excluded from A3** - Audit trail (sold shares excluded from Table A3)
+7. **A2 Peak Calculation** - Peak balance calculation workings
+8. **A3 Peak Value Details** - Per-tranche peak value breakdown
+9. **Pre-2025 Holdings Init Val** - Initial value for shares acquired before FY 2025-26
+10. **2025 - Daily Rates** - Complete daily data matrix (Date | Price | TTBR | INR Value)
+
+**Conditional Sheets (only if applicable):**
+- **Dividends (Schedule FA)** - Only appears if you received dividends during the FY
+- **Dividends (Schedule OS)** - Only appears if you received dividends during the FY
 
 ### Rounding Rules
 
@@ -183,7 +195,7 @@ The generated `schedule_fa_{YEAR}-{YEAR+1}.xlsx` contains:
 - **Solution:** Check "A2 Peak Calculation" sheet to see which date was identified as peak and why
 
 **Problem:** Capital gains calculation looks off
-- **Solution:** Verify FIFO matching in "Capital Gains" sheet, check acquisition dates are correct
+- **Solution:** Verify lot matching from E*TRADE G&L report in "Capital Gains" sheet, check acquisition dates are correct. We use E*TRADE's actual lot matching, not forced FIFO (per Circular 704).
 
 **Problem:** "config.json has invalid JSON syntax" error before Python is installed
 - **Solution:** Install Python first. The batch file will re-check JSON validity after Python setup
@@ -200,5 +212,5 @@ For technical questions about the calculations, refer to the specific documentat
 
 ---
 
-**Last Updated:** July {YEAR+1}  
-**Script Version:** FY {YEAR}-{YEAR+1}
+**Last Updated:** August 2026  
+**Script Version:** FY 2025-26
