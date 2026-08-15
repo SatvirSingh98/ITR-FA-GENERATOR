@@ -27,16 +27,6 @@ Table A3 (Equity Interest) in Schedule FA uses **MULTIPLE rows for the same acqu
 
 ---
 
-## ITRFA.in Official Guidance (2026-08-03)
-
-### Question Asked:
-"I see that in A3 you have mentioned multiple rows for the shares with acquisition date of 2024-11-08 as there was partial sale for this, is this format correct? I thought like we need to have only one row per acquisition date per entity type and if there is any sale then we need to decrease the shares, correct the peak value and then provide the gross proceeds."
-
-### ITRFA.in Answer:
-"**Multiple A3 rows for the same acquisition date — yes, correct, and intentional.** A holding acquired on one date but partly sold shows as two separate Table A3 rows: one for the shares still held (closing value = your Dec 31 balance) and one for the shares sold (closing value = 0, gross proceeds shown). **We never collapse these into a single row with a reduced share count, because the two portions have genuinely different peak and closing values through the year — combining them would misstate both.**"
-
----
-
 ## Example: Partial Sale
 
 ### Scenario
