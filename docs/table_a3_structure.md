@@ -216,11 +216,6 @@ The peak value calculation window depends on when the lot was acquired and wheth
 - **Why:** Peak is only for the period shares were actually held
 
 
-```python
-hold_start = max(self.start_date, acq_date_str)  # Later of: Jan 1 OR acquisition
-hold_end = sell_date_str if (sell_date_str and sell_date_str <= self.end_date) else self.end_date
-```
-
 ### Verification
 
 The **A3 Peak Value Details** sheet shows the exact peak calculation window and peak date for each lot. See [a3_peak_value_details.md](a3_peak_value_details.md) for details.
